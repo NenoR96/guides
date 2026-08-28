@@ -1,0 +1,3628 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guides Content</title>
+    <script src="../../../../scripts/buildfire.min.js"></script>
+    <script src="../../../../scripts/tinymce/tinymce.min.js"></script>
+    <script src="migrate-existing-content.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            color: #2f3542;
+            background: #f7f8fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        button,
+        input,
+        textarea,
+        select {
+            font: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .shell {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 18px;
+            background: none;
+        }
+
+        .header h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #68707d;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        #quiz-search {
+            margin-bottom: 10px;
+        }
+
+        .guides-cms-tabs {
+            position: static;
+            z-index: auto;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            gap: 4px;
+            margin-bottom: 16px;
+            padding: 4px;
+            border: 1px solid #dde1e7;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .guides-cms-tab {
+            position: static;
+            display: block;
+            flex: 1 1 0;
+            width: auto;
+            height: auto;
+            min-height: 40px;
+            margin: 0;
+            padding: 10px 14px;
+            border: 0;
+            border-radius: 7px;
+            color: #596170;
+            background: transparent;
+            font-weight: 650;
+        }
+
+        .guides-cms-tab.active {
+            color: #fff;
+            background: #356fd0;
+        }
+
+        .guides-cms-panel {
+            display: none;
+        }
+
+        .guides-cms-panel.active {
+            display: block;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 16px;
+        }
+
+        .card {
+            padding: 18px;
+            border: 1px solid #dde1e7;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(20, 30, 50, 0.04);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .card-header h2 {
+            margin: 0;
+            font-size: 17px;
+        }
+
+        .list {
+            display: flex;
+            gap: 7px;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 1px 1px 8px;
+            scroll-snap-type: x proximity;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .list-empty {
+            padding: 24px 8px;
+            color: #7b8492;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        .list-item {
+            flex: 0 0 min(260px, 78vw);
+            width: min(260px, 78vw);
+            padding: 11px 12px;
+            border: 1px solid #e3e6eb;
+            border-radius: 8px;
+            color: #303744;
+            background: #fff;
+            text-align: left;
+            scroll-snap-align: start;
+        }
+
+        .list-item:hover {
+            border-color: #aebedb;
+            background: #f8faff;
+        }
+
+        .list-item.active {
+            border-color: #356fd0;
+            background: #edf4ff;
+        }
+
+        .list-item strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 13px;
+        }
+
+        .list-item span {
+            color: #7b8492;
+            font-size: 11px;
+        }
+
+        .lesson-list-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .lesson-list-heading strong {
+            min-width: 0;
+            margin-bottom: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .lesson-edit-cue {
+            flex: 0 0 auto;
+            padding: 3px 7px;
+            border-radius: 5px;
+            color: #356fd0 !important;
+            background: #edf4ff;
+            font-weight: 700;
+        }
+
+        #lesson-list {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            max-height: 430px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 1px 4px 1px 1px;
+            scroll-snap-type: none;
+        }
+
+        #lesson-list .list-item {
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            scroll-snap-align: none;
+        }
+
+        .lesson-filters {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        #lesson-editor[hidden] {
+            display: none;
+        }
+
+        #lesson-selector[hidden] {
+            display: none;
+        }
+
+        #quiz-editor[hidden] {
+            display: none;
+        }
+
+        #quiz-selector[hidden],
+        #quiz-import-export[hidden] {
+            display: none;
+        }
+
+        #quiz-list {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            max-height: 430px;
+            overflow-y: auto;
+        }
+
+        #quiz-list .list-item {
+            width: 100%;
+            max-width: none;
+        }
+
+        .quiz-builder {
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+            border: 1px solid #dde1e7;
+            border-radius: 10px;
+            background: #f8faff;
+        }
+
+        .quiz-builder-header,
+        .quiz-card-header,
+        .quiz-option-row {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .quiz-builder-header,
+        .quiz-card-header {
+            justify-content: space-between;
+        }
+
+        .quiz-builder-header h3,
+        .quiz-card-header strong {
+            margin: 0;
+            color: #303744;
+            font-size: 14px;
+        }
+
+        .quiz-builder-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .quiz-builder-empty {
+            padding: 22px 12px;
+            border: 1px dashed #cfd5dd;
+            border-radius: 8px;
+            color: #7b8492;
+            background: #fff;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .quiz-question-card,
+        .quiz-result-card {
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+            border: 1px solid #d8dee8;
+            border-radius: 9px;
+            background: #fff;
+        }
+
+        .quiz-card-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .quiz-card-actions .btn {
+            padding: 5px 8px;
+        }
+
+        .quiz-options {
+            display: grid;
+            gap: 8px;
+        }
+
+        .quiz-option-row input[type="radio"] {
+            flex: 0 0 auto;
+            width: auto;
+            margin: 0;
+        }
+
+        .quiz-option-row input[type="text"] {
+            min-width: 0;
+        }
+
+        .quiz-option-row .remove-option {
+            flex: 0 0 auto;
+            padding: 8px 10px;
+            color: #b42318;
+        }
+
+        .quiz-feedback-fields {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .quiz-feedback-fields .full {
+            grid-column: 1 / -1;
+        }
+
+        .quiz-card-note {
+            color: #7b8492;
+            font-size: 11px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+        }
+
+        .field.full {
+            grid-column: 1 / -1;
+        }
+
+        .field label {
+            color: #4f5867;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .field small {
+            color: #7b8492;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px 11px;
+            border: 1px solid #cfd5dd;
+            border-radius: 7px;
+            color: #303744;
+            background: #fff;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            border-color: #356fd0;
+            outline: 2px solid rgba(53, 111, 208, 0.12);
+        }
+
+        textarea {
+            min-height: 88px;
+            resize: vertical;
+            line-height: 1.45;
+        }
+
+        .check-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .check-row label {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .check-row input {
+            width: auto;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 9px;
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid #eceef2;
+        }
+
+        .btn {
+            padding: 9px 14px;
+            border: 1px solid #cfd5dd;
+            border-radius: 7px;
+            color: #303744;
+            background: #fff;
+            font-weight: 650;
+        }
+
+        .btn:hover {
+            background: #f6f7f9;
+        }
+
+        .btn.primary {
+            border-color: #356fd0;
+            color: #fff;
+            background: #356fd0;
+        }
+
+        .btn.primary:hover {
+            background: #2e61b7;
+        }
+
+        .btn.danger {
+            margin-right: auto;
+            border-color: #e3b4b4;
+            color: #b42318;
+        }
+
+        .btn.small {
+            padding: 7px 10px;
+            font-size: 12px;
+        }
+
+        .btn:disabled {
+            opacity: 0.55;
+            cursor: wait;
+        }
+
+        .status {
+            min-height: 20px;
+            margin: 12px 0 0;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .status[data-type="success"] {
+            color: #16803c;
+        }
+
+        .status[data-type="error"] {
+            color: #c62828;
+        }
+
+        .status[data-type="loading"] {
+            color: #356fd0;
+        }
+
+        .sections {
+            display: grid;
+            gap: 10px;
+        }
+
+        .section-row {
+            display: grid;
+            grid-template-columns: 1fr 1.4fr 1.4fr 0.7fr auto;
+            gap: 8px;
+            padding: 12px;
+            border: 1px solid #e1e5eb;
+            border-radius: 9px;
+            background: #fafbfc;
+        }
+
+        .section-row textarea {
+            grid-column: 1 / -1;
+            min-height: 65px;
+        }
+
+        .section-row .remove {
+            align-self: start;
+            color: #b42318;
+        }
+
+        .json-field {
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            font-size: 12px;
+        }
+
+        .notice {
+            margin-bottom: 14px;
+            padding: 11px 13px;
+            border: 1px solid #cfe0fb;
+            border-radius: 8px;
+            color: #365477;
+            background: #f2f7ff;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .html-upload-drop {
+            position: relative;
+            display: grid;
+            min-height: 150px;
+            place-items: center;
+            padding: 24px;
+            border: 2px dashed #aebbd0;
+            border-radius: 10px;
+            color: #356fd0;
+            background: #f7faff;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .html-upload-drop:hover {
+            border-color: #356fd0;
+            background: #eef5ff;
+        }
+
+        .html-upload-drop input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0;
+        }
+
+        .html-upload-meta {
+            display: none;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            color: #596170;
+            background: #f2f4f7;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .html-upload-meta.visible {
+            display: block;
+        }
+
+        .description {
+            margin: 3px 0 0;
+            color: #7b8492;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .advanced {
+            overflow: hidden;
+            border: 1px solid #dde1e7;
+            border-radius: 10px;
+            background: #fafbfc;
+        }
+
+        .advanced>summary {
+            padding: 13px 15px;
+            color: #4f5867;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .advanced-body {
+            padding: 15px;
+            border-top: 1px solid #e5e8ed;
+        }
+
+        .organization-block {
+            margin-top: 8px;
+            padding-top: 18px;
+            border-top: 1px solid #eceef2;
+        }
+
+        .choice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+            gap: 8px;
+        }
+
+        .choice-grid label {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 10px;
+            border: 1px solid #dde1e7;
+            border-radius: 7px;
+            background: #fff;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .choice-grid input {
+            width: auto;
+        }
+
+        .theme-editor,
+        .milestone-editor {
+            display: grid;
+            gap: 12px;
+        }
+
+        .theme-card,
+        .milestone-card {
+            padding: 13px;
+            border: 1px solid #dde1e7;
+            border-radius: 10px;
+            background: #fafbfc;
+        }
+
+        .theme-card.dragging,
+        .theme-lesson.dragging {
+            opacity: .45;
+        }
+
+        .theme-fields {
+            display: grid;
+            grid-template-columns: 1fr 1.4fr 1.6fr .8fr auto;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .theme-lessons {
+            display: grid;
+            gap: 6px;
+            min-height: 38px;
+            margin-bottom: 9px;
+            padding: 7px;
+            border: 1px dashed #cdd4dd;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .theme-lesson {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 9px;
+            border-radius: 6px;
+            background: #f1f4f8;
+            cursor: grab;
+        }
+
+        .theme-lesson span {
+            flex: 1;
+            font-size: 12px;
+        }
+
+        .theme-lesson button {
+            border: 0;
+            color: #b42318;
+            background: transparent;
+        }
+
+        .theme-add-row,
+        .inline-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .html-export-actions {
+            justify-content: flex-start;
+            margin-top: 14px;
+        }
+
+        .lesson-json-tools {
+            margin-top: 16px;
+        }
+
+        .lesson-json-tools .description {
+            margin-bottom: 0;
+        }
+
+        #lesson-import-file,
+        #quiz-import-file {
+            display: none;
+        }
+
+        .theme-add-row select {
+            flex: 1;
+        }
+
+        .theme-order {
+            display: flex;
+            gap: 4px;
+            align-items: start;
+        }
+
+        .age-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .age-tab {
+            flex: 0 0 auto;
+            padding: 8px 11px;
+            border: 1px solid #d7dce3;
+            border-radius: 999px;
+            background: #fff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .age-tab.active {
+            border-color: #356fd0;
+            color: #fff;
+            background: #356fd0;
+        }
+
+        .lesson-choices {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            max-height: 330px;
+            overflow-y: auto;
+        }
+
+        .milestone-card summary {
+            font-weight: 750;
+            cursor: pointer;
+        }
+
+        .milestone-grid {
+            margin-top: 12px;
+        }
+
+        .warning {
+            border-color: #f1d49a;
+            color: #765318;
+            background: #fff8e8;
+        }
+
+        .html-upload-meta strong {
+            display: block;
+            color: #303744;
+            font-size: 13px;
+        }
+
+        .release-panel {
+            display: none;
+            margin-top: 14px;
+            padding: 14px;
+            border: 1px solid #d9e0e8;
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+
+        .release-panel.visible {
+            display: block;
+        }
+
+        .release-summary {
+            margin: 0 0 10px;
+            color: #4f5867;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+
+        .release-summary strong {
+            color: #27313d;
+        }
+
+        .release-warnings {
+            margin: 8px 0;
+            padding-left: 18px;
+            color: #765318;
+            font-size: 12px;
+        }
+
+        .release-preview {
+            display: block;
+            width: 100%;
+            height: 560px;
+            margin-top: 12px;
+            border: 1px solid #d9e0e8;
+            border-radius: 9px;
+            background: #fff;
+        }
+
+        .release-list {
+            display: grid;
+            gap: 8px;
+            max-height: 480px;
+            margin-top: 12px;
+            overflow-y: auto;
+        }
+
+        .release-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border: 1px solid #e1e5ea;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .release-item-copy {
+            min-width: 0;
+        }
+
+        .release-item-actions {
+            display: flex;
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .release-item strong,
+        .release-item span {
+            display: block;
+        }
+
+        .release-item strong {
+            overflow: hidden;
+            font-size: 12px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .release-item span {
+            margin-top: 3px;
+            color: #7b8492;
+            font-size: 11px;
+        }
+
+        .release-current {
+            color: #137b66 !important;
+            font-weight: 700;
+        }
+
+        @media (max-width: 760px) {
+            body {
+                padding: 12px;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .field.full {
+                grid-column: auto;
+            }
+
+            .quiz-feedback-fields {
+                grid-template-columns: 1fr;
+            }
+
+            .quiz-feedback-fields .full {
+                grid-column: auto;
+            }
+
+            .quiz-builder-header,
+            .quiz-card-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .section-row {
+                grid-template-columns: 1fr;
+            }
+
+            .theme-fields {
+                grid-template-columns: 1fr;
+            }
+
+            .section-row textarea {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="shell">
+        <header class="header">
+            <h1>Interactive guides</h1>
+            <p>Edit guide content, organize themes and ages, and publish the experience without managing raw IDs.</p>
+        </header>
+
+        <div class="guides-cms-tabs" role="tablist" aria-label="Content type">
+            <button class="guides-cms-tab active" type="button" data-panel="lessons-panel">Guides</button>
+            <button class="guides-cms-tab" type="button" data-panel="quizzes-panel">Quizzes</button>
+            <button class="guides-cms-tab" type="button" data-panel="journeys-panel">Organization</button>
+            <button class="guides-cms-tab" type="button" data-panel="html-panel">HTML</button>
+        </div>
+
+        <section class="guides-cms-panel active" id="lessons-panel">
+            <div class="layout">
+                <aside class="card" id="lesson-selector">
+                    <div class="card-header">
+                        <h2>Guides</h2>
+                        <button class="btn small primary" id="new-lesson" type="button">New</button>
+                    </div>
+                    <div class="lesson-filters">
+                        <input id="lesson-search" type="search" placeholder="Search guides">
+                        <select id="lesson-category-filter">
+                            <option value="">All categories</option>
+                        </select>
+                    </div>
+                    <div class="list" id="lesson-list"></div>
+                </aside>
+
+                <section class="card" id="lesson-editor" hidden>
+                    <div class="card-header">
+                        <h2 id="lesson-form-title">New guide</h2>
+                    </div>
+                    <form id="lesson-form">
+                        <div class="form-grid">
+                            <div class="field full">
+                                <label for="lesson-title">Title</label>
+                                <input id="lesson-title" required>
+                            </div>
+                            <div class="field">
+                                <label for="lesson-theme">Category</label>
+                                <select id="lesson-theme"></select>
+                            </div>
+                            <div class="field">
+                                <label for="lesson-placement">Journey placement</label>
+                                <select id="lesson-placement">
+                                    <option value="">Not placed</option>
+                                    <option value="fundamentals">Base / fundamentals</option>
+                                    <option value="ageless">Practical / any age</option>
+                                    <option value="5">Introduced at 0–5 months</option>
+                                    <option value="6">Introduced at 6 months</option>
+                                    <option value="7">Introduced at 7 months</option>
+                                    <option value="8">Introduced at 8 months</option>
+                                    <option value="9">Introduced at 9 months</option>
+                                    <option value="10">Introduced at 10 months</option>
+                                    <option value="11">Introduced at 11 months</option>
+                                    <option value="12">Introduced at 12 months</option>
+                                    <option value="24">Introduced at 24+ months</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="lesson-read-time">Read time</label>
+                                <input id="lesson-read-time" placeholder="8 min">
+                            </div>
+                            <div class="field full">
+                                <label>Relevant ages</label>
+                                <div class="choice-grid" id="lesson-age-options"></div>
+                            </div>
+                            <div class="field full">
+                                <label for="lesson-tldr">Key takeaways</label>
+                                <textarea id="lesson-tldr" placeholder="One takeaway per line"></textarea>
+                            </div>
+                            <div class="field full">
+                                <label for="lesson-body">Guide body</label>
+                                <textarea id="lesson-body"></textarea>
+                            </div>
+                            <div class="field full check-row">
+                                <label><input id="lesson-published" type="checkbox" checked> Published</label>
+                                <label><input id="lesson-premium" type="checkbox"> Premium</label>
+                            </div>
+                            <details class="advanced field full">
+                                <summary>Advanced guide settings</summary>
+                                <div class="form-grid advanced-body">
+                                    <div class="field">
+                                        <label for="lesson-slug">Stable ID</label>
+                                        <input id="lesson-slug" placeholder="blw-o-que-e">
+                                        <small>Used by progress and references. Avoid changing it after
+                                            publishing.</small>
+                                    </div>
+                                    <div class="field">
+                                        <label for="lesson-icon">Icon ID</label>
+                                        <input id="lesson-icon" placeholder="book">
+                                    </div>
+                                    <div class="field full">
+                                        <label for="lesson-tag">Fine-grained tag</label>
+                                        <input id="lesson-tag" placeholder="Fundamentos">
+                                    </div>
+                                    <div class="field">
+                                        <label for="lesson-source">Imported from</label>
+                                        <input id="lesson-source" disabled>
+                                    </div>
+                                    <div class="field">
+                                        <label for="lesson-updated">Last updated</label>
+                                        <input id="lesson-updated" disabled>
+                                    </div>
+                                    <input id="lesson-phases" type="hidden">
+                                </div>
+                            </details>
+                        </div>
+                        <div class="actions">
+                            <button class="btn danger" id="delete-lesson" type="button" hidden>Delete</button>
+                            <button class="btn" id="reset-lesson" type="button">Reset</button>
+                            <button class="btn primary" id="save-lesson" type="submit">Save guide</button>
+                        </div>
+                    </form>
+                    <div class="status" id="lesson-status" role="status" aria-live="polite"></div>
+                </section>
+            </div>
+        </section>
+
+        <section class="guides-cms-panel" id="quizzes-panel">
+            <div class="layout">
+                <section class="card lesson-json-tools" id="quiz-import-export">
+                    <div class="card-header">
+                        <div>
+                            <h2>Quiz import and export</h2>
+                            <p class="description">Extract the complete quiz set from the bundled interactive HTML, or
+                                exchange quiz JSON files.</p>
+                        </div>
+                    </div>
+                    <div class="inline-actions html-export-actions">
+                        <button class="btn small primary" id="import-html-quizzes" type="button">Import quizzes from
+                            HTML</button>
+                        <button class="btn small" id="download-quiz-template" type="button">Download template</button>
+                        <button class="btn small" id="import-quizzes" type="button">Import JSON</button>
+                        <button class="btn small" id="export-quizzes" type="button">Export quizzes</button>
+                        <input id="quiz-import-file" type="file" accept=".json,application/json">
+                    </div>
+                    <div class="status" id="quiz-import-status" role="status" aria-live="polite"></div>
+                </section>
+
+                <aside class="card" id="quiz-selector">
+                    <div class="card-header">
+                        <div>
+                            <h2>Quizzes</h2>
+                            <p class="description">Playable quizzes stored in the plugin datastore.</p>
+                        </div>
+                        <button class="btn small primary" id="new-quiz" type="button">New</button>
+                    </div>
+                    <input id="quiz-search" type="search" placeholder="Search quizzes">
+                    <div class="list" id="quiz-list"></div>
+                </aside>
+
+                <section class="card" id="quiz-editor" hidden>
+                    <div class="card-header">
+                        <h2 id="quiz-form-title">New quiz</h2>
+                    </div>
+                    <form id="quiz-form" novalidate>
+                        <div class="form-grid">
+                            <div class="field full"><label for="quiz-title">Title</label><input id="quiz-title"
+                                    required></div>
+                            <div class="field"><label for="quiz-after-guide">Appears after guide</label><select
+                                    id="quiz-after-guide" required></select><small>Required for published quizzes so they appear in the widget.</small></div>
+                            <div class="field"><label for="quiz-source-guide">Source guide</label><select
+                                    id="quiz-source-guide"></select></div>
+                            <div class="field full"><label for="quiz-also-after">Also appears after</label><select
+                                    id="quiz-also-after" multiple size="5"></select><small>Hold Ctrl/Cmd to select
+                                    multiple guides.</small></div>
+                            <div class="field"><label for="quiz-intro-title">Intro title</label><input
+                                    id="quiz-intro-title"></div>
+                            <div class="field"><label for="quiz-intro-sub">Intro subtitle</label><input
+                                    id="quiz-intro-sub"></div>
+                            <div class="field full"><label for="quiz-intro-note">Intro note</label><textarea
+                                    id="quiz-intro-note"></textarea></div>
+                            <section class="quiz-builder field full" aria-labelledby="quiz-questions-heading">
+                                <div class="quiz-builder-header">
+                                    <div><h3 id="quiz-questions-heading">Questions</h3><small>Add choices, choose the correct answer, and write the feedback shown after answering.</small></div>
+                                    <button class="btn small primary" id="add-quiz-question" type="button">Add question</button>
+                                </div>
+                                <div class="quiz-builder-list" id="quiz-questions-editor"></div>
+                            </section>
+                            <section class="quiz-builder field full" aria-labelledby="quiz-bonus-heading">
+                                <div class="quiz-builder-header">
+                                    <div><h3 id="quiz-bonus-heading">Bonus question</h3><small>Optional question unlocked by the quiz experience.</small></div>
+                                    <button class="btn small" id="toggle-quiz-bonus" type="button">Add bonus question</button>
+                                </div>
+                                <div class="quiz-builder-list" id="quiz-bonus-editor"></div>
+                            </section>
+                            <section class="quiz-builder field full" aria-labelledby="quiz-results-heading">
+                                <div class="quiz-builder-header">
+                                    <div><h3 id="quiz-results-heading">Result tiers</h3><small>Set the minimum score and message for each result.</small></div>
+                                    <button class="btn small primary" id="add-quiz-result" type="button">Add result tier</button>
+                                </div>
+                                <div class="quiz-builder-list" id="quiz-results-editor"></div>
+                            </section>
+                            <div class="field full check-row"><label><input id="quiz-published" type="checkbox" checked>
+                                    Published</label></div>
+                            <details class="advanced field full">
+                                <summary>Advanced quiz settings</summary>
+                                <div class="form-grid advanced-body">
+                                    <div class="field"><label for="quiz-id">Stable ID</label><input id="quiz-id"
+                                            placeholder="quiz-seguranca"><small>Changing this after publishing
+                                            disconnects existing user progress.</small></div>
+                                    <div class="field"><label for="quiz-source">Imported from</label><input
+                                            id="quiz-source" disabled></div>
+                                    <div class="field"><label for="quiz-updated">Last updated</label><input
+                                            id="quiz-updated" disabled></div>
+                                </div>
+                            </details>
+                        </div>
+                        <div class="actions">
+                            <button class="btn danger" id="delete-quiz" type="button" hidden>Delete</button>
+                            <button class="btn" id="reset-quiz" type="button">Cancel</button>
+                            <button class="btn primary" id="save-quiz" type="submit">Save quiz</button>
+                        </div>
+                    </form>
+                    <div class="status" id="quiz-status" role="status" aria-live="polite"></div>
+                </section>
+
+            </div>
+        </section>
+
+        <section class="guides-cms-panel" id="journeys-panel">
+            <div class="layout">
+                <section class="card">
+                    <form id="journey-form">
+                        <div class="form-grid">
+                            <div class="field full">
+                                <label for="journey-title">Title</label>
+                                <input id="journey-title" required>
+                            </div>
+                            <div class="field full">
+                                <label for="journey-description">Description</label>
+                                <textarea id="journey-description"></textarea>
+                            </div>
+                            <div class="field full check-row">
+                                <label><input id="journey-default" type="checkbox"> Default journey</label>
+                                <label><input id="journey-published" type="checkbox" checked> Published</label>
+                            </div>
+
+                            <section class="organization-block field full">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>Categories</h2>
+                                        <p class="description">Drag categories or guides to change the Lista view.</p>
+                                    </div>
+                                    <button class="btn small" id="add-theme" type="button">Add category</button>
+                                </div>
+                                <div class="theme-editor" id="theme-editor"></div>
+                                <div class="notice warning" id="organization-warnings" hidden></div>
+                            </section>
+
+                            <section class="organization-block field full">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>Age personalization</h2>
+                                        <p class="description">Choose guides shown for the baby's current age.</p>
+                                    </div>
+                                </div>
+                                <div class="age-tabs" id="age-tabs"></div>
+                                <div class="choice-grid lesson-choices" id="age-lesson-options"></div>
+                            </section>
+
+                            <section class="organization-block field full">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>Milestones</h2>
+                                        <p class="description">Edit expectations and reminders without JSON.</p>
+                                    </div>
+                                </div>
+                                <div class="milestone-editor" id="milestone-editor"></div>
+                            </section>
+
+                            <details class="advanced field full" id="journey-advanced">
+                                <summary>Advanced journey and data tools</summary>
+                                <div class="advanced-body">
+                                    <div class="card-header">
+                                        <h2>Multiple journeys</h2><button class="btn small primary" id="new-journey"
+                                            type="button">New journey</button>
+                                    </div>
+                                    <div class="list" id="journey-list"></div>
+                                    <div class="inline-actions"><button class="btn small danger" id="delete-journey"
+                                            type="button" hidden>Delete selected journey</button></div>
+                                    <div class="form-grid">
+                                        <div class="field full"><label for="journey-id">Stable journey ID</label><input
+                                                id="journey-id" placeholder="blw-0-a-2"></div>
+                                        <div class="field full">
+                                            <div class="card-header"><label>Curriculum sections</label><button
+                                                    class="btn small" id="add-section" type="button">Add
+                                                    section</button></div>
+                                            <div class="sections" id="sections"></div>
+                                        </div>
+                                        <div class="field full"><label for="phase-highlights">Phase highlights
+                                                JSON</label><textarea class="json-field"
+                                                id="phase-highlights"></textarea></div>
+                                        <div class="field full"><label for="list-themes-json">Categories
+                                                JSON</label><textarea class="json-field"
+                                                id="list-themes-json"></textarea></div>
+                                        <div class="field full"><label for="milestones">Milestones JSON</label><textarea
+                                                class="json-field" id="milestones"></textarea></div>
+                                        <div class="field full">
+                                            <label for="journey-json">Import/export complete journey JSON</label>
+                                            <textarea class="json-field" id="journey-json"></textarea>
+                                            <div class="inline-actions"><button class="btn small"
+                                                    id="refresh-journey-json" type="button">Refresh
+                                                    export</button><button class="btn small" id="copy-journey-json"
+                                                    type="button">Copy JSON</button><button class="btn small"
+                                                    id="apply-journey-json" type="button">Apply JSON</button></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                        <div class="actions">
+                            <button class="btn" id="reset-journey" type="button">Reset</button>
+                            <button class="btn primary" id="save-journey" type="submit">Save organization</button>
+                        </div>
+                    </form>
+                    <div class="status" id="journey-status" role="status" aria-live="polite"></div>
+                </section>
+            </div>
+        </section>
+
+        <section class="guides-cms-panel" id="html-panel">
+            <section class="card">
+                <div class="card-header">
+                    <div>
+                        <h2>AI release</h2>
+                        <p class="description">Stage an AI working HTML file, review its design and content changes,
+                            then publish them as one rollback-safe release.</p>
+                    </div>
+                </div>
+                <label class="html-upload-drop" for="html-file">
+                    <span id="html-file-prompt">Choose an AI working .html file to stage</span>
+                    <input id="html-file" type="file" accept=".html,.htm,text/html">
+                </label>
+                <div class="html-upload-meta" id="html-upload-meta">
+                    <strong id="html-upload-name"></strong>
+                    <span id="html-upload-details"></span>
+                </div>
+                <div class="inline-actions html-export-actions">
+                    <button class="btn small" id="download-html" type="button" disabled>Download HTML shell</button>
+                    <button class="btn small primary" id="download-ai-working-file" type="button">Download AI working
+                        file</button>
+                    <button class="btn small" id="export-content" type="button">Export complete content</button>
+                </div>
+                <div class="release-panel" id="release-draft-panel">
+                    <div class="card-header">
+                        <div>
+                            <h2>Staged release</h2>
+                            <p class="description">Nothing changes in the live widget until you publish.</p>
+                        </div>
+                    </div>
+                    <p class="release-summary" id="release-diff"></p>
+                    <ul class="release-warnings" id="release-warnings"></ul>
+                    <div class="inline-actions html-export-actions">
+                        <button class="btn small" id="discard-release" type="button">Discard</button>
+                        <button class="btn small primary" id="publish-release" type="button">Publish release</button>
+                    </div>
+                    <iframe class="release-preview" id="release-preview" title="Staged guide release preview"
+                        sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>
+                </div>
+                <div class="status" id="html-status" role="status" aria-live="polite"></div>
+            </section>
+            <section class="card lesson-json-tools">
+                <div class="card-header">
+                    <div>
+                        <h2>Release history</h2>
+                        <p class="description">Restore a previous matched design and content snapshot, or remove old
+                            inactive releases. The current release and user progress are always preserved.</p>
+                    </div>
+                    <button class="btn small danger" id="delete-inactive-releases" type="button">Delete inactive releases</button>
+                </div>
+                <div class="release-list" id="release-list">
+                    <div class="list-empty">No versioned releases yet.</div>
+                </div>
+                <div class="status" id="release-status" role="status" aria-live="polite"></div>
+            </section>
+            <section class="card lesson-json-tools">
+                <div class="card-header">
+                    <div>
+                        <h2>Guide JSON</h2>
+                        <p class="description">Download a documented template for AI, then import new guides or update
+                            existing ones by stable ID.</p>
+                    </div>
+                </div>
+                <div class="inline-actions html-export-actions">
+                    <button class="btn small" id="download-lesson-template" type="button">Download guide
+                        template</button>
+                    <button class="btn small primary" id="import-lessons" type="button">Import guides</button>
+                    <button class="btn small" id="export-lessons" type="button">Export guides</button>
+                    <input id="lesson-import-file" type="file" accept=".json,application/json">
+                </div>
+                <div class="status" id="lesson-import-status" role="status" aria-live="polite"></div>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        (function () {
+            "use strict";
+
+            // "lesson" identifiers below are retained only as persisted-schema compatibility names.
+            // Product and team terminology is "guide".
+            const LESSON_TAG = "guideLessons";
+            const QUIZ_TAG = "guideQuizzes";
+            const JOURNEY_TAG = "guideJourneys";
+            const HTML_TAG = "interactiveGuideHtml";
+            const PAGE_SIZE = 50;
+            const AGE_KEYS = ["5", "6", "7", "8", "9", "10", "11", "12", "24"];
+            const AGE_LABELS = { "5": "0–5", "6": "6", "7": "7", "8": "8", "9": "9", "10": "10", "11": "11", "12": "12", "24": "24+" };
+            const state = {
+                lessons: [],
+                quizzes: [],
+                journeys: [],
+                defaultJourneyId: "",
+                selectedLessonId: null,
+                selectedQuizId: null,
+                quizDraftQuestions: [],
+                quizDraftBonus: null,
+                quizDraftResults: [],
+                selectedJourneyId: null,
+                activeAgeKey: "6",
+                organizationDraft: null,
+                uploadedHtml: null,
+                busy: false,
+                initialized: false
+            };
+
+            const $ = (id) => document.getElementById(id);
+            const lessonList = $("lesson-list");
+            const quizList = $("quiz-list");
+            const journeyList = $("journey-list");
+            const sectionsContainer = $("sections");
+            const htmlFileInput = $("html-file");
+            const lessonImportFileInput = $("lesson-import-file");
+            const quizImportFileInput = $("quiz-import-file");
+
+            function errorMessage(error) {
+                if (!error) return "Unknown error";
+                if (typeof error === "string") return error;
+                return error.message || JSON.stringify(error);
+            }
+
+            function setStatus(target, message, type) {
+                target.textContent = message || "";
+                target.dataset.type = type || "";
+            }
+
+            function setBusy(isBusy) {
+                state.busy = isBusy;
+                document.querySelectorAll("button").forEach((button) => {
+                    button.disabled = isBusy;
+                });
+                $("download-html").disabled = isBusy || !state.uploadedHtml;
+                htmlFileInput.disabled = isBusy;
+                lessonImportFileInput.disabled = isBusy;
+                quizImportFileInput.disabled = isBusy;
+            }
+
+            function formatBytes(bytes) {
+                if (!Number.isFinite(bytes) || bytes < 0) return "Unknown size";
+                if (bytes < 1024) return bytes + " bytes";
+                if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+                return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+            }
+
+            function showUploadedHtml(data) {
+                const meta = $("html-upload-meta");
+                state.uploadedHtml = data && typeof data.html === "string" && data.html.trim() ? data : null;
+                $("download-html").disabled = !state.uploadedHtml || state.busy;
+                if (!data || typeof data.html !== "string" || !data.html.trim()) {
+                    meta.classList.remove("visible");
+                    return;
+                }
+                $("html-upload-name").textContent = data.fileName || "Uploaded HTML";
+                const details = [formatBytes(data.fileSize)];
+                if (data.updatedAt) {
+                    const savedAt = new Date(data.updatedAt);
+                    if (!Number.isNaN(savedAt.getTime())) details.push("Saved " + savedAt.toLocaleString());
+                }
+                $("html-upload-details").textContent = details.join(" · ");
+                meta.classList.add("visible");
+                $("html-file-prompt").textContent = "Choose another .html file to replace it";
+            }
+
+            function safeDownloadName(value, fallback, extension) {
+                const name = String(value || fallback)
+                    .split(/[\\/]/).pop()
+                    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+                    .trim() || fallback;
+                return name.toLowerCase().endsWith(extension) ? name : name + extension;
+            }
+
+            function downloadText(contents, type, fileName) {
+                const url = URL.createObjectURL(new Blob([contents], { type }));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 0);
+            }
+
+            function downloadUploadedHtml() {
+                if (!state.uploadedHtml) {
+                    setStatus($("html-status"), "No HTML shell is available to download.", "error");
+                    return;
+                }
+                const fileName = safeDownloadName(state.uploadedHtml.fileName, "interactive-guides.html", ".html");
+                downloadText(state.uploadedHtml.html, "text/html;charset=utf-8", fileName);
+                setStatus($("html-status"), "Downloaded " + fileName + ".", "success");
+            }
+
+            function exportCompleteContent() {
+                const lessons = state.lessons.map((lesson) => {
+                    const content = { ...lesson };
+                    delete content._recordId;
+                    delete content.summary;
+                    return content;
+                }).sort((a, b) => String(a.slug || "").localeCompare(String(b.slug || "")));
+                const exportedAt = new Date().toISOString();
+                const quizzes = state.quizzes.map((quiz) => {
+                    const content = { ...quiz };
+                    delete content._recordId;
+                    return content;
+                }).sort((a, b) => String(a.id || "").localeCompare(String(b.id || "")));
+                const payload = {
+                    schemaVersion: 1,
+                    exportType: "buildfire-guides-content",
+                    exportedAt,
+                    lessons,
+                    quizzes,
+                    journeyData: {
+                        schemaVersion: 1,
+                        defaultJourneyId: state.defaultJourneyId,
+                        journeys: clone(state.journeys),
+                        exportedAt
+                    }
+                };
+                const fileName = "guides-content-" + exportedAt.slice(0, 10) + ".json";
+                downloadText(JSON.stringify(payload, null, 2), "application/json;charset=utf-8", fileName);
+                setStatus(
+                    $("html-status"),
+                    "Exported " + lessons.length + " guide(s), " + quizzes.length + " quiz(zes), and " + state.journeys.length + " journey(s).",
+                    "success"
+                );
+            }
+
+            function lessonTemplatePayload() {
+                const journey = activeJourney();
+                const categories = journey && Array.isArray(journey.listThemes)
+                    ? journey.listThemes.map((theme) => ({ key: theme.key, label: theme.label || theme.key }))
+                    : [];
+                const placements = journey && Array.isArray(journey.sections) && journey.sections.length
+                    ? journey.sections.map((section) => ({ key: section.id, label: section.title || section.id }))
+                    : [
+                        { key: "fundamentals", label: "Base / fundamentals" },
+                        { key: "ageless", label: "Practical / any age" },
+                        ...AGE_KEYS.map((key) => ({ key, label: AGE_LABELS[key] + " months" }))
+                    ];
+                return {
+                    schemaVersion: 1,
+                    exportType: "buildfire-guides-lessons",
+                    instructions: {
+                        purpose: "Ask an AI to return valid JSON only, preserving this structure. Guide records use the compatibility key lessons. A new stable ID creates a guide; an existing stable ID updates that guide without resetting progress.",
+                        requiredFields: ["slug", "title", "bodyHtml"],
+                        slug: "A unique permanent ID using lowercase letters, numbers, and hyphens only.",
+                        bodyHtml: "Semantic HTML for the complete guide body. Do not include html, head, script, or body wrapper tags.",
+                        tldr: "An array of short key takeaway strings.",
+                        phaseKeys: "Relevant baby ages. Allowed values: " + AGE_KEYS.join(", ") + ".",
+                        listThemeKey: "Use a category key from availableOrganization.categories. Leave empty only for an unpublished draft.",
+                        journeySectionKey: "Use a key from availableOrganization.journeyPlacements."
+                    },
+                    availableOrganization: {
+                        categories,
+                        journeyPlacements: placements
+                    },
+                    lessons: [{
+                        schemaVersion: 1,
+                        slug: "replace-with-unique-guide-id",
+                        title: "Replace with guide title",
+                        tag: "Replace with a fine-grained tag",
+                        icon: "book",
+                        readTime: "8 min",
+                        listThemeKey: categories.length ? categories[0].key : "",
+                        journeySectionKey: placements.length ? placements[0].key : "",
+                        phaseKeys: ["6"],
+                        tldr: [
+                            "Replace with the first key takeaway.",
+                            "Replace with the second key takeaway."
+                        ],
+                        bodyHtml: "<h2>Replace with a section heading</h2><p>Replace with guide content.</p>",
+                        premium: false,
+                        published: true
+                    }]
+                };
+            }
+
+            function downloadLessonTemplate() {
+                downloadText(
+                    JSON.stringify(lessonTemplatePayload(), null, 2),
+                    "application/json;charset=utf-8",
+                    "guides-guide-template.json"
+                );
+                setStatus($("lesson-import-status"), "Guide template downloaded.", "success");
+            }
+
+            function exportLessons() {
+                const payload = lessonTemplatePayload();
+                payload.exportedAt = new Date().toISOString();
+                payload.lessons = state.lessons
+                    .slice()
+                    .sort((a, b) => String(a.slug || "").localeCompare(String(b.slug || "")))
+                    .map((lesson) => ({
+                        schemaVersion: 1,
+                        slug: lesson.slug || "",
+                        title: lesson.title || "",
+                        tag: lesson.tag || "",
+                        icon: lesson.icon || "",
+                        readTime: lesson.readTime || "",
+                        listThemeKey: lesson.listThemeKey || "",
+                        journeySectionKey: lesson.journeySectionKey || "",
+                        phaseKeys: Array.isArray(lesson.phaseKeys) ? lesson.phaseKeys.slice() : [],
+                        tldr: Array.isArray(lesson.tldr) ? lesson.tldr.slice() : [],
+                        bodyHtml: lesson.bodyHtml || "",
+                        premium: lesson.premium === true,
+                        published: lesson.published !== false
+                    }));
+                const fileName = "guides-content-" + payload.exportedAt.slice(0, 10) + ".json";
+                downloadText(JSON.stringify(payload, null, 2), "application/json;charset=utf-8", fileName);
+                setStatus(
+                    $("lesson-import-status"),
+                    "Exported " + payload.lessons.length + " guide(s).",
+                    "success"
+                );
+            }
+
+            function normalizeImportedLesson(value, index, fileName) {
+                const label = "Guide " + (index + 1);
+                if (!value || typeof value !== "object" || Array.isArray(value)) {
+                    throw new Error(label + " must be a JSON object.");
+                }
+                const suppliedSlug = String(value.slug || "").trim();
+                const slug = normalizeSlug(suppliedSlug);
+                if (!suppliedSlug) throw new Error(label + " is missing slug.");
+                if (slug !== suppliedSlug) {
+                    throw new Error(label + " slug must use lowercase letters, numbers, and hyphens only: " + suppliedSlug);
+                }
+                const title = String(value.title || "").trim();
+                if (!title) throw new Error(label + " is missing title.");
+                if (typeof value.bodyHtml !== "string" || !value.bodyHtml.trim()) {
+                    throw new Error(label + " is missing bodyHtml.");
+                }
+                const bodyHtml = normalizeGuideBodyHtml(value.bodyHtml, label);
+                const phaseKeys = value.phaseKeys == null ? [] : value.phaseKeys;
+                if (!Array.isArray(phaseKeys) || phaseKeys.some((key) => !AGE_KEYS.includes(String(key)))) {
+                    throw new Error(label + " phaseKeys must contain only: " + AGE_KEYS.join(", ") + ".");
+                }
+                const tldr = value.tldr == null ? [] : value.tldr;
+                if (!Array.isArray(tldr) || tldr.some((item) => typeof item !== "string")) {
+                    throw new Error(label + " tldr must be an array of strings.");
+                }
+                const journey = activeJourney();
+                const listThemeKey = String(value.listThemeKey || "").trim();
+                const journeySectionKey = String(value.journeySectionKey || "").trim();
+                const selectedTheme = journey && Array.isArray(journey.listThemes)
+                    ? journey.listThemes.find((theme) => theme.key === listThemeKey)
+                    : null;
+                if (listThemeKey && journey && !selectedTheme) {
+                    throw new Error(label + " uses an unknown category key: " + listThemeKey);
+                }
+                const published = value.published !== false;
+                if (published && journey && journey.listThemes && journey.listThemes.length && !selectedTheme) {
+                    throw new Error(label + " must use a valid listThemeKey before it can be published.");
+                }
+                const placementKeys = journey && Array.isArray(journey.sections) && journey.sections.length
+                    ? journey.sections.map((section) => section.id)
+                    : ["fundamentals", "ageless", ...AGE_KEYS];
+                const validPlacement = !journeySectionKey || placementKeys.includes(journeySectionKey);
+                if (!validPlacement) {
+                    throw new Error(label + " uses an unknown journeySectionKey: " + journeySectionKey);
+                }
+                return {
+                    schemaVersion: 1,
+                    slug,
+                    title,
+                    tag: String(value.tag || "").trim(),
+                    icon: String(value.icon || "").trim(),
+                    readTime: String(value.readTime || "").trim(),
+                    phaseKeys: phaseKeys.map(String),
+                    journeySectionKey,
+                    listThemeKey,
+                    listThemeLabel: selectedTheme ? selectedTheme.label || "" : "",
+                    listThemeSubtitle: selectedTheme ? selectedTheme.subtitle || "" : "",
+                    listThemeIcon: selectedTheme ? selectedTheme.icon || "" : "",
+                    tldr: tldr.map((item) => item.trim()).filter(Boolean),
+                    bodyHtml,
+                    premium: value.premium === true,
+                    published,
+                    migratedFrom: "JSON import: " + fileName,
+                    updatedAt: new Date().toISOString()
+                };
+            }
+
+            function lessonsFromImportPayload(payload, fileName) {
+                const values = Array.isArray(payload) ? payload : payload && payload.lessons;
+                if (!Array.isArray(values) || !values.length) {
+                    throw new Error("The JSON file must contain a non-empty lessons array of guides.");
+                }
+                const lessons = values.map((value, index) => normalizeImportedLesson(value, index, fileName));
+                const importedSlugs = new Set();
+                lessons.forEach((lesson) => {
+                    if (importedSlugs.has(lesson.slug)) {
+                        throw new Error("The import contains the stable ID more than once: " + lesson.slug);
+                    }
+                    importedSlugs.add(lesson.slug);
+                });
+                return lessons;
+            }
+
+            function readLessonImportFile(file) {
+                if (!/\.json$/i.test(file.name) && file.type !== "application/json" && file.type !== "") {
+                    lessonImportFileInput.value = "";
+                    setStatus($("lesson-import-status"), "Please choose a .json file.", "error");
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    let createdCount = 0;
+                    let updatedCount = 0;
+                    try {
+                        const payload = JSON.parse(String(event.target.result || ""));
+                        setBusy(true);
+                        setStatus($("lesson-import-status"), "Validating guide JSON...", "loading");
+                        await loadLessons();
+                        const lessons = lessonsFromImportPayload(payload, file.name);
+                        setStatus($("lesson-import-status"), "Importing " + lessons.length + " guide(s)...", "loading");
+                        let journey = activeJourney();
+                        for (const lesson of lessons) {
+                            const existing = state.lessons.find((item) => item.slug === lesson.slug);
+                            if (existing && existing._recordId) {
+                                await updateLesson(existing._recordId, lesson);
+                                updatedCount += 1;
+                            } else {
+                                await insertLesson(lesson);
+                                createdCount += 1;
+                            }
+                            journey = syncJourneyReferencesForLesson(journey, lesson, existing && existing.slug);
+                        }
+                        if (journey) {
+                            const journeyIndex = state.journeys.findIndex((item) => item.id === journey.id);
+                            state.journeys.splice(journeyIndex, 1, journey);
+                            await saveJourneyCollection();
+                        }
+                        await loadLessons();
+                        if (journey && state.selectedJourneyId === journey.id) selectJourney(journey.id);
+                        renderLessonFilterOptions();
+                        setStatus($("lesson-import-status"), "Imported " + createdCount + " new and updated " + updatedCount + " existing guide(s).", "success");
+                    } catch (error) {
+                        console.error("Unable to import guides", error);
+                        if (createdCount || updatedCount) await loadLessons().catch(() => { });
+                        const changed = createdCount + updatedCount;
+                        const prefix = changed ? "Applied " + changed + " guide change(s) before an error. Use an AI release for rollback-safe bulk changes. " : "";
+                        setStatus($("lesson-import-status"), prefix + errorMessage(error), "error");
+                    } finally {
+                        lessonImportFileInput.value = "";
+                        setBusy(false);
+                    }
+                };
+                reader.onerror = () => {
+                    lessonImportFileInput.value = "";
+                    setStatus($("lesson-import-status"), "The selected JSON file could not be read.", "error");
+                };
+                reader.readAsText(file);
+            }
+
+            function readHtmlFile(file) {
+                const isHtml = /\.html?$/i.test(file.name) || file.type === "text/html" || file.type === "";
+                if (!isHtml) {
+                    htmlFileInput.value = "";
+                    setStatus($("html-status"), "Please choose an .html or .htm file.", "error");
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const html = event.target.result;
+                    if (typeof html !== "string" || !html.trim()) {
+                        htmlFileInput.value = "";
+                        setStatus($("html-status"), "The selected HTML file is empty.", "error");
+                        return;
+                    }
+                    const data = {
+                        html,
+                        fileName: file.name,
+                        fileSize: file.size,
+                        updatedAt: new Date().toISOString()
+                    };
+                    try {
+                        setBusy(true);
+                        setStatus($("html-status"), "Uploading " + file.name + "…", "loading");
+                        await saveData(data, HTML_TAG);
+                        showUploadedHtml(data);
+                        setStatus($("html-status"), "HTML uploaded. The widget will reload this shell.", "success");
+                    } catch (error) {
+                        console.error("Unable to upload interactive HTML", error);
+                        setStatus($("html-status"), "Unable to upload HTML: " + errorMessage(error), "error");
+                    } finally {
+                        htmlFileInput.value = "";
+                        setBusy(false);
+                    }
+                };
+                reader.onerror = () => {
+                    htmlFileInput.value = "";
+                    setStatus($("html-status"), "The selected file could not be read.", "error");
+                };
+                reader.readAsText(file);
+            }
+
+            function getData(tag) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.get(tag, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result && result.data ? result.data : null);
+                    });
+                });
+            }
+
+            function searchPage(tag, page) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.search({ page, pageSize: PAGE_SIZE }, tag, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(Array.isArray(result) ? result : ((result && result.result) || []));
+                    });
+                });
+            }
+
+            async function searchAllLessons() {
+                return searchAllRecords(LESSON_TAG);
+            }
+
+            async function searchAllQuizzes() {
+                return searchAllRecords(QUIZ_TAG);
+            }
+
+            async function searchAllRecords(tag) {
+                const records = [];
+                for (let page = 0; ; page += 1) {
+                    const batch = await searchPage(tag, page);
+                    records.push(...batch);
+                    if (batch.length < PAGE_SIZE) break;
+                }
+                return records;
+            }
+
+            function saveData(data, tag) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.save(data, tag, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    });
+                });
+            }
+
+            function insertLesson(data) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.insert(data, LESSON_TAG, false, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    });
+                });
+            }
+
+            function updateLesson(recordId, data) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.update(recordId, data, LESSON_TAG, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    });
+                });
+            }
+
+            function deleteLesson(recordId) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.delete(recordId, LESSON_TAG, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    });
+                });
+            }
+
+            function insertQuiz(data) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.insert(data, QUIZ_TAG, false, (error, result) => {
+                        if (error) reject(error); else resolve(result);
+                    });
+                });
+            }
+
+            function updateQuiz(recordId, data) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.update(recordId, data, QUIZ_TAG, (error, result) => {
+                        if (error) reject(error); else resolve(result);
+                    });
+                });
+            }
+
+            function deleteQuiz(recordId) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.delete(recordId, QUIZ_TAG, (error, result) => {
+                        if (error) reject(error); else resolve(result);
+                    });
+                });
+            }
+
+            function unwrapLesson(record) {
+                const data = record && record.data ? record.data : record;
+                const recordId = record && (record.id || record._id);
+                return { ...data, _recordId: recordId || data._recordId };
+            }
+
+            function unwrapQuiz(record) {
+                const data = record && record.data ? record.data : record;
+                const recordId = record && (record.id || record._id);
+                return { ...data, _recordId: recordId || data._recordId };
+            }
+
+            function currentEditor() {
+                return window.tinymce && tinymce.get("lesson-body");
+            }
+
+            function setEditorContent(html) {
+                const editor = currentEditor();
+                if (editor) editor.setContent(html || "");
+                else $("lesson-body").value = html || "";
+            }
+
+            function getEditorContent() {
+                const editor = currentEditor();
+                return editor ? editor.getContent() : $("lesson-body").value;
+            }
+
+            function normalizeGuideBodyHtml(html, label) {
+                const template = document.createElement("template");
+                template.innerHTML = String(html || "");
+                if (template.content.querySelector("script")) {
+                    throw new Error((label || "Guide") + " body cannot contain script elements.");
+                }
+                template.content.querySelectorAll("*").forEach((element) => {
+                    Array.from(element.attributes).forEach((attribute) => {
+                        const name = attribute.name.toLowerCase();
+                        const value = attribute.value.trim().toLowerCase();
+                        // BuildFire WYSIWYG action links retain their declarative
+                        // data-action-item payload. Runtime code executes that payload;
+                        // imported inline JavaScript must never be persisted.
+                        if (name.startsWith("on") || name === "srcdoc") {
+                            element.removeAttribute(attribute.name);
+                        } else if (["href", "src", "xlink:href"].includes(name) && value.startsWith("javascript:")) {
+                            element.removeAttribute(attribute.name);
+                        }
+                    });
+                });
+                return template.innerHTML.trim();
+            }
+
+            function normalizeSlug(value) {
+                return String(value || "")
+                    .trim()
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, "");
+            }
+
+            function splitLines(value) {
+                return String(value || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+            }
+
+            function clone(value) {
+                return value == null ? value : JSON.parse(JSON.stringify(value));
+            }
+
+            function escapeHtml(value) {
+                return String(value == null ? "" : value)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            function listHtml(items) {
+                return items.length ? "<ul>" + items.map((item) => "<li>" + escapeHtml(item) + "</li>").join("") + "</ul>" : "";
+            }
+
+            function milestoneItems(value, html) {
+                if (Array.isArray(value)) return value.slice();
+                if (!html) return [];
+                const container = document.createElement("div");
+                container.innerHTML = html;
+                return Array.from(container.querySelectorAll("li")).map((item) => item.textContent.trim()).filter(Boolean);
+            }
+
+            function sortedLessons() {
+                return state.lessons.slice().sort((a, b) => String(a.title || a.slug).localeCompare(String(b.title || b.slug)));
+            }
+
+            function activeJourney() {
+                return state.journeys.find((item) => item.id === state.selectedJourneyId) ||
+                    state.journeys.find((item) => item.id === state.defaultJourneyId) || state.journeys[0] || null;
+            }
+
+            function lessonPlacement(slug, journey) {
+                const section = journey && Array.isArray(journey.sections)
+                    ? journey.sections.find((item) => Array.isArray(item.lessonIds) && item.lessonIds.includes(slug))
+                    : null;
+                return section ? section.id : "";
+            }
+
+            function renderLessonOrganizationOptions(selectedTheme, selectedAges) {
+                const journey = activeJourney();
+                const themes = journey && Array.isArray(journey.listThemes) ? journey.listThemes : [];
+                const select = $("lesson-theme");
+                select.innerHTML = '<option value="">Needs organization</option>';
+                themes.forEach((theme) => {
+                    const option = document.createElement("option");
+                    option.value = theme.key;
+                    option.textContent = theme.label || theme.key;
+                    select.appendChild(option);
+                });
+                select.value = selectedTheme || "";
+
+                const ages = new Set(selectedAges || []);
+                $("lesson-age-options").innerHTML = "";
+                AGE_KEYS.forEach((key) => {
+                    const label = document.createElement("label");
+                    const input = document.createElement("input");
+                    input.type = "checkbox";
+                    input.value = key;
+                    input.checked = ages.has(key);
+                    label.append(input, document.createTextNode(AGE_LABELS[key] + " months"));
+                    $("lesson-age-options").appendChild(label);
+                });
+            }
+
+            function renderLessonList() {
+                lessonList.innerHTML = "";
+                const search = $("lesson-search").value.trim().toLocaleLowerCase();
+                const category = $("lesson-category-filter").value;
+                const journey = activeJourney();
+                const themeFor = (slug) => journey && Array.isArray(journey.listThemes)
+                    ? journey.listThemes.find((theme) => (theme.lessonIds || []).includes(slug)) : null;
+                const sorted = state.lessons.filter((lesson) => {
+                    const theme = themeFor(lesson.slug);
+                    const matchesSearch = !search || [lesson.title, lesson.slug].some((value) => String(value || "").toLocaleLowerCase().includes(search));
+                    const matchesCategory = !category || (category === "uncategorized" ? !theme : theme && theme.key === category);
+                    return matchesSearch && matchesCategory;
+                }).sort((a, b) => {
+                    return String(a.title || a.slug).localeCompare(String(b.title || b.slug));
+                });
+                if (!sorted.length) {
+                    lessonList.innerHTML = '<div class="list-empty">No CMS guides yet.</div>';
+                    return;
+                }
+                sorted.forEach((lesson) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "list-item" + (lesson._recordId === state.selectedLessonId ? " active" : "");
+                    button.setAttribute("aria-label", "Edit " + (lesson.title || lesson.slug || "guide"));
+                    const heading = document.createElement("span");
+                    heading.className = "lesson-list-heading";
+                    const title = document.createElement("strong");
+                    title.textContent = lesson.title || lesson.slug || "Untitled guide";
+                    const editCue = document.createElement("span");
+                    editCue.className = "lesson-edit-cue";
+                    editCue.textContent = "Edit";
+                    const meta = document.createElement("span");
+                    const theme = themeFor(lesson.slug);
+                    meta.textContent = (theme ? theme.label + " · " : "Needs organization · ") +
+                        (lesson.slug || "no-id") + (lesson.published === false ? " · Draft" : "");
+                    heading.append(title, editCue);
+                    button.append(heading, meta);
+                    button.addEventListener("click", () => selectLesson(lesson._recordId, true));
+                    lessonList.appendChild(button);
+                });
+            }
+
+            function renderLessonFilterOptions() {
+                const select = $("lesson-category-filter");
+                const selected = select.value;
+                select.innerHTML = '<option value="">All categories</option><option value="uncategorized">Needs organization</option>';
+                const journey = activeJourney();
+                (journey && journey.listThemes || []).forEach((theme) => {
+                    const option = document.createElement("option");
+                    option.value = theme.key;
+                    option.textContent = theme.label || theme.key;
+                    select.appendChild(option);
+                });
+                if (Array.from(select.options).some((option) => option.value === selected)) select.value = selected;
+            }
+
+            function clearLessonForm(showEditor, hideSelector) {
+                $("lesson-editor").hidden = showEditor === false;
+                $("lesson-selector").hidden = hideSelector === true;
+                state.selectedLessonId = null;
+                $("lesson-form").reset();
+                $("lesson-published").checked = true;
+                $("lesson-form-title").textContent = "New guide";
+                $("lesson-source").value = "";
+                $("lesson-updated").value = "";
+                $("delete-lesson").hidden = true;
+                $("reset-lesson").textContent = "Cancel";
+                $("save-lesson").textContent = "Create guide";
+                renderLessonOrganizationOptions("", []);
+                $("lesson-placement").value = "";
+                setEditorContent("");
+                setStatus($("lesson-status"), "", "");
+                renderLessonList();
+            }
+
+            function selectLesson(recordId, shouldScroll) {
+                const lesson = state.lessons.find((item) => item._recordId === recordId);
+                if (!lesson) return;
+                $("lesson-editor").hidden = false;
+                $("lesson-selector").hidden = false;
+                state.selectedLessonId = recordId;
+                $("lesson-form-title").textContent = "Edit guide";
+                $("reset-lesson").textContent = "Cancel";
+                $("save-lesson").textContent = "Save changes";
+                $("lesson-slug").value = lesson.slug || "";
+                $("lesson-title").value = lesson.title || "";
+                $("lesson-tag").value = lesson.tag || "";
+                $("lesson-icon").value = lesson.icon || "";
+                $("lesson-read-time").value = lesson.readTime || "";
+                $("lesson-phases").value = Array.isArray(lesson.phaseKeys) ? lesson.phaseKeys.join(", ") : "";
+                $("lesson-source").value = lesson.migratedFrom || "Created in CMS";
+                $("lesson-updated").value = lesson.updatedAt ? new Date(lesson.updatedAt).toLocaleString() : "";
+                const journey = activeJourney();
+                const theme = journey && Array.isArray(journey.listThemes)
+                    ? journey.listThemes.find((item) => Array.isArray(item.lessonIds) && item.lessonIds.includes(lesson.slug))
+                    : null;
+                const highlightedAges = journey && journey.phaseHighlights
+                    ? AGE_KEYS.filter((key) => Array.isArray(journey.phaseHighlights[key]) && journey.phaseHighlights[key].includes(lesson.slug))
+                    : (Array.isArray(lesson.phaseKeys) ? lesson.phaseKeys : []);
+                renderLessonOrganizationOptions(theme ? theme.key : lesson.listThemeKey, highlightedAges);
+                $("lesson-placement").value = lessonPlacement(lesson.slug, journey);
+                $("lesson-tldr").value = Array.isArray(lesson.tldr) ? lesson.tldr.join("\n") : "";
+                $("lesson-published").checked = lesson.published !== false;
+                $("lesson-premium").checked = !!lesson.premium;
+                $("delete-lesson").hidden = false;
+                setEditorContent(lesson.bodyHtml || "");
+                setStatus($("lesson-status"), "", "");
+                renderLessonList();
+                if (shouldScroll) {
+                    requestAnimationFrame(() => {
+                        $("lesson-editor").scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                }
+            }
+
+            function readLessonForm() {
+                const slug = normalizeSlug($("lesson-slug").value || $("lesson-title").value);
+                if (!slug) throw new Error("A stable guide ID is required.");
+                $("lesson-slug").value = slug;
+                const duplicate = state.lessons.find((item) => item.slug === slug && item._recordId !== state.selectedLessonId);
+                if (duplicate) throw new Error("Another guide already uses the ID “" + slug + "”.");
+                const existing = state.lessons.find((item) => item._recordId === state.selectedLessonId);
+                const selectedTheme = activeJourney() && Array.isArray(activeJourney().listThemes)
+                    ? activeJourney().listThemes.find((item) => item.key === $("lesson-theme").value)
+                    : null;
+                const phaseKeys = Array.from($("lesson-age-options").querySelectorAll("input:checked")).map((input) => input.value);
+                const preserved = { ...(existing || {}) };
+                delete preserved._recordId;
+                delete preserved.summary;
+                return {
+                    ...preserved,
+                    schemaVersion: 1,
+                    slug,
+                    title: $("lesson-title").value.trim(),
+                    tag: $("lesson-tag").value.trim(),
+                    icon: $("lesson-icon").value.trim(),
+                    readTime: $("lesson-read-time").value.trim(),
+                    phaseKeys,
+                    journeySectionKey: $("lesson-placement").value,
+                    listThemeKey: selectedTheme ? selectedTheme.key : "",
+                    listThemeLabel: selectedTheme ? selectedTheme.label || "" : "",
+                    listThemeSubtitle: selectedTheme ? selectedTheme.subtitle || "" : "",
+                    listThemeIcon: selectedTheme ? selectedTheme.icon || "" : "",
+                    tldr: splitLines($("lesson-tldr").value),
+                    bodyHtml: normalizeGuideBodyHtml(getEditorContent(), "Guide"),
+                    premium: $("lesson-premium").checked,
+                    published: $("lesson-published").checked,
+                    updatedAt: new Date().toISOString()
+                };
+            }
+
+            function syncJourneyReferencesForLesson(journey, lesson, previousSlug) {
+                if (!journey) return null;
+                const next = clone(journey);
+                const removeIds = new Set([previousSlug, lesson.slug].filter(Boolean));
+                next.listThemes = Array.isArray(next.listThemes) ? next.listThemes : [];
+                next.listThemes.forEach((theme) => {
+                    theme.lessonIds = (theme.lessonIds || []).filter((id) => !removeIds.has(id));
+                });
+                const theme = next.listThemes.find((item) => item.key === lesson.listThemeKey);
+                if (theme) theme.lessonIds.push(lesson.slug);
+
+                next.phaseHighlights = next.phaseHighlights || {};
+                AGE_KEYS.forEach((key) => {
+                    next.phaseHighlights[key] = (next.phaseHighlights[key] || []).filter((id) => !removeIds.has(id));
+                    if (lesson.phaseKeys.includes(key)) next.phaseHighlights[key].push(lesson.slug);
+                });
+
+                next.sections = Array.isArray(next.sections) ? next.sections : [];
+                next.sections.forEach((section) => {
+                    section.lessonIds = (section.lessonIds || []).filter((id) => !removeIds.has(id));
+                });
+                if (lesson.journeySectionKey) {
+                    let section = next.sections.find((item) => item.id === lesson.journeySectionKey);
+                    if (!section) {
+                        section = {
+                            id: lesson.journeySectionKey,
+                            title: lesson.journeySectionKey === "fundamentals" ? "A Base do BLW" :
+                                (lesson.journeySectionKey === "ageless" ? "Praticidade" : AGE_LABELS[lesson.journeySectionKey] + " meses"),
+                            icon: lesson.journeySectionKey === "ageless" ? "sparkle" : "leaf",
+                            lessonIds: []
+                        };
+                        next.sections.push(section);
+                    }
+                    section.lessonIds.push(lesson.slug);
+                }
+                return next;
+            }
+
+            async function saveJourneyCollection() {
+                await saveData({
+                    schemaVersion: 1,
+                    defaultJourneyId: state.defaultJourneyId,
+                    journeys: state.journeys,
+                    updatedAt: new Date().toISOString()
+                }, JOURNEY_TAG);
+            }
+
+            async function handleLessonSave(event) {
+                event.preventDefault();
+                try {
+                    const previous = state.lessons.find((item) => item._recordId === state.selectedLessonId);
+                    const data = readLessonForm();
+                    if (!data.title) throw new Error("A guide title is required.");
+                    if (data.published && activeJourney() && activeJourney().listThemes && activeJourney().listThemes.length && !data.listThemeKey) {
+                        throw new Error("Choose a category before publishing this guide.");
+                    }
+                    setBusy(true);
+                    setStatus($("lesson-status"), "Saving guide…", "loading");
+                    let result;
+                    if (state.selectedLessonId) result = await updateLesson(state.selectedLessonId, data);
+                    else result = await insertLesson(data);
+                    const journey = activeJourney();
+                    const syncedJourney = syncJourneyReferencesForLesson(journey, data, previous && previous.slug);
+                    if (syncedJourney) {
+                        const index = state.journeys.findIndex((item) => item.id === journey.id);
+                        state.journeys.splice(index, 1, syncedJourney);
+                        await saveJourneyCollection();
+                    }
+                    await loadLessons();
+                    if (syncedJourney && state.selectedJourneyId === syncedJourney.id) selectJourney(syncedJourney.id);
+                    const savedId = (result && (result.id || result._id)) ||
+                        (state.lessons.find((item) => item.slug === data.slug) || {})._recordId;
+                    if (savedId) selectLesson(savedId);
+                    setStatus($("lesson-status"), "Guide saved.", "success");
+                } catch (error) {
+                    console.error("Unable to save guide", error);
+                    setStatus($("lesson-status"), errorMessage(error), "error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            async function handleLessonDelete() {
+                const lesson = state.lessons.find((item) => item._recordId === state.selectedLessonId);
+                if (!lesson || !window.confirm("Delete “" + (lesson.title || lesson.slug) + "” and remove it from categories and ages?")) return;
+                try {
+                    setBusy(true);
+                    setStatus($("lesson-status"), "Deleting guide…", "loading");
+                    await deleteLesson(lesson._recordId);
+                    state.journeys = state.journeys.map((journey) => {
+                        const next = clone(journey);
+                        (next.sections || []).forEach((section) => {
+                            section.lessonIds = (section.lessonIds || []).filter((id) => id !== lesson.slug);
+                        });
+                        (next.listThemes || []).forEach((theme) => {
+                            theme.lessonIds = (theme.lessonIds || []).filter((id) => id !== lesson.slug);
+                        });
+                        Object.keys(next.phaseHighlights || {}).forEach((key) => {
+                            next.phaseHighlights[key] = (next.phaseHighlights[key] || []).filter((id) => id !== lesson.slug);
+                        });
+                        return next;
+                    });
+                    await saveJourneyCollection();
+                    await loadLessons();
+                    if (state.selectedJourneyId && state.journeys.some((item) => item.id === state.selectedJourneyId)) {
+                        selectJourney(state.selectedJourneyId);
+                    }
+                    clearLessonForm(false);
+                    setStatus($("lesson-status"), "Guide deleted.", "success");
+                } catch (error) {
+                    console.error("Unable to delete guide", error);
+                    setStatus($("lesson-status"), errorMessage(error), "error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            function normalizeJourney(journey) {
+                const next = clone(journey || {});
+                next.sections = Array.isArray(next.sections) ? next.sections : [];
+                next.listThemes = Array.isArray(next.listThemes) ? next.listThemes : [];
+                if (!next.listThemes.length) {
+                    const byKey = new Map();
+                    state.lessons.forEach((lesson) => {
+                        if (!lesson.listThemeKey) return;
+                        if (!byKey.has(lesson.listThemeKey)) {
+                            byKey.set(lesson.listThemeKey, {
+                                key: lesson.listThemeKey,
+                                label: lesson.listThemeLabel || lesson.listThemeKey,
+                                subtitle: lesson.listThemeSubtitle || "",
+                                icon: lesson.listThemeIcon || "book",
+                                lessonIds: []
+                            });
+                        }
+                        byKey.get(lesson.listThemeKey).lessonIds.push(lesson.slug);
+                    });
+                    next.listThemes = Array.from(byKey.values());
+                }
+                next.phaseHighlights = next.phaseHighlights || {};
+                next.milestones = next.milestones || {};
+                AGE_KEYS.forEach((key) => {
+                    if (!Array.isArray(next.phaseHighlights[key])) next.phaseHighlights[key] = [];
+                });
+                return next;
+            }
+
+            function lessonTitle(slug) {
+                const lesson = state.lessons.find((item) => item.slug === slug);
+                return lesson ? lesson.title || lesson.slug : slug;
+            }
+
+            function updateOrganizationWarnings() {
+                const target = $("organization-warnings");
+                if (!state.organizationDraft) return;
+                const counts = new Map();
+                state.organizationDraft.listThemes.forEach((theme) => {
+                    (theme.lessonIds || []).forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
+                });
+                const published = state.lessons.filter((lesson) => lesson.published !== false);
+                const missing = published.filter((lesson) => !counts.has(lesson.slug));
+                const sectionIds = new Set((state.organizationDraft.sections || []).flatMap((section) => section.lessonIds || []));
+                const unplaced = published.filter((lesson) => !sectionIds.has(lesson.slug));
+                const duplicates = Array.from(counts).filter(([, count]) => count > 1).map(([id]) => lessonTitle(id));
+                const unknown = Array.from(counts.keys()).filter((id) => !state.lessons.some((lesson) => lesson.slug === id));
+                const messages = [];
+                if (missing.length) messages.push(missing.length + " published guide(s) need a category: " + missing.map((item) => item.title || item.slug).join(", "));
+                if (unplaced.length) messages.push(unplaced.length + " published guide(s) need journey placement: " + unplaced.map((item) => item.title || item.slug).join(", "));
+                if (duplicates.length) messages.push("Assigned more than once: " + duplicates.join(", "));
+                if (unknown.length) messages.push("Unknown guide references: " + unknown.join(", "));
+                target.hidden = !messages.length;
+                target.textContent = messages.join(" • ");
+            }
+
+            function readSectionRows() {
+                return Array.from(sectionsContainer.querySelectorAll(".section-row")).map((row) => ({
+                    id: normalizeSlug(row.querySelector(".section-id").value),
+                    title: row.querySelector(".section-title").value.trim(),
+                    subtitle: row.querySelector(".section-subtitle").value.trim(),
+                    icon: row.querySelector(".section-icon").value.trim(),
+                    lessonIds: splitLines(row.querySelector(".section-lessons").value)
+                })).filter((section) => section.id || section.title || section.lessonIds.length);
+            }
+
+            function syncAdvancedJsonFromDraft() {
+                if (!state.organizationDraft) return;
+                state.organizationDraft.sections = readSectionRows();
+                $("phase-highlights").value = JSON.stringify(state.organizationDraft.phaseHighlights || {}, null, 2);
+                $("list-themes-json").value = JSON.stringify(state.organizationDraft.listThemes || [], null, 2);
+                $("milestones").value = JSON.stringify(state.organizationDraft.milestones || {}, null, 2);
+                $("journey-json").value = JSON.stringify({
+                    ...state.organizationDraft,
+                    id: normalizeSlug($("journey-id").value),
+                    title: $("journey-title").value.trim(),
+                    description: $("journey-description").value.trim(),
+                    published: $("journey-published").checked
+                }, null, 2);
+            }
+
+            function themeLessonRow(slug, themeKey, lessonIndex) {
+                const row = document.createElement("div");
+                row.className = "theme-lesson";
+                row.draggable = true;
+                row.dataset.lessonId = slug;
+                row.dataset.themeKey = themeKey;
+                const grip = document.createElement("b");
+                grip.textContent = "☰";
+                const name = document.createElement("span");
+                name.textContent = lessonTitle(slug);
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "Remove";
+                remove.addEventListener("click", () => {
+                    const theme = state.organizationDraft.listThemes.find((item) => item.key === themeKey);
+                    theme.lessonIds = theme.lessonIds.filter((id) => id !== slug);
+                    renderThemeEditor();
+                });
+                const up = document.createElement("button");
+                up.type = "button";
+                up.textContent = "↑";
+                up.title = "Move guide up";
+                up.disabled = lessonIndex === 0;
+                up.addEventListener("click", () => {
+                    const theme = state.organizationDraft.listThemes.find((item) => item.key === themeKey);
+                    const moved = theme.lessonIds.splice(lessonIndex, 1)[0];
+                    theme.lessonIds.splice(lessonIndex - 1, 0, moved);
+                    renderThemeEditor();
+                });
+                const down = document.createElement("button");
+                down.type = "button";
+                down.textContent = "↓";
+                down.title = "Move guide down";
+                const sourceTheme = state.organizationDraft.listThemes.find((item) => item.key === themeKey);
+                down.disabled = lessonIndex === sourceTheme.lessonIds.length - 1;
+                down.addEventListener("click", () => {
+                    const theme = state.organizationDraft.listThemes.find((item) => item.key === themeKey);
+                    const moved = theme.lessonIds.splice(lessonIndex, 1)[0];
+                    theme.lessonIds.splice(lessonIndex + 1, 0, moved);
+                    renderThemeEditor();
+                });
+                row.addEventListener("dragstart", (event) => {
+                    event.stopPropagation();
+                    row.classList.add("dragging");
+                    event.dataTransfer.setData("text/plain", JSON.stringify({ type: "lesson", slug, from: themeKey }));
+                });
+                row.addEventListener("dragend", () => row.classList.remove("dragging"));
+                row.append(grip, name, up, down, remove);
+                return row;
+            }
+
+            function createThemeCard(theme, index) {
+                const card = document.createElement("article");
+                card.className = "theme-card";
+                card.draggable = true;
+                card.dataset.themeKey = theme.key;
+                card.innerHTML = [
+                    '<div class="theme-fields">',
+                    '<input class="theme-key" aria-label="Category ID" placeholder="tema-novo">',
+                    '<input class="theme-label" aria-label="Category title" placeholder="Category title">',
+                    '<input class="theme-subtitle" aria-label="Category subtitle" placeholder="Short description">',
+                    '<input class="theme-icon" aria-label="Icon ID" placeholder="leaf">',
+                    '<div class="theme-order"><button class="btn small theme-up" type="button" title="Move up">↑</button><button class="btn small theme-down" type="button" title="Move down">↓</button><button class="btn small danger theme-remove" type="button">Delete</button></div>',
+                    '</div>',
+                    '<div class="theme-lessons"></div>',
+                    '<div class="theme-add-row"><select class="theme-add-select"></select><button class="btn small theme-add" type="button">Add guide</button></div>'
+                ].join("");
+                card.querySelector(".theme-key").value = theme.key || "";
+                card.querySelector(".theme-label").value = theme.label || "";
+                card.querySelector(".theme-subtitle").value = theme.subtitle || "";
+                card.querySelector(".theme-icon").value = theme.icon || "";
+                card.querySelector(".theme-lessons").append(...(theme.lessonIds || []).map((id, lessonIndex) => themeLessonRow(id, theme.key, lessonIndex)));
+
+                const addSelect = card.querySelector(".theme-add-select");
+                addSelect.innerHTML = '<option value="">Choose or move a guide…</option>';
+                const currentIds = new Set(theme.lessonIds || []);
+                sortedLessons().filter((lesson) => !currentIds.has(lesson.slug)).forEach((lesson) => {
+                    const option = document.createElement("option");
+                    option.value = lesson.slug;
+                    const currentTheme = state.organizationDraft.listThemes.find((item) => (item.lessonIds || []).includes(lesson.slug));
+                    option.textContent = (lesson.title || lesson.slug) + (currentTheme ? " — from " + (currentTheme.label || currentTheme.key) : " — unassigned");
+                    addSelect.appendChild(option);
+                });
+
+                ["key", "label", "subtitle", "icon"].forEach((field) => {
+                    card.querySelector(".theme-" + field).addEventListener("input", (event) => {
+                        theme[field] = field === "key" ? normalizeSlug(event.target.value) : event.target.value;
+                        syncAdvancedJsonFromDraft();
+                    });
+                });
+                card.querySelector(".theme-key").addEventListener("change", renderThemeEditor);
+                card.querySelector(".theme-add").addEventListener("click", () => {
+                    if (!addSelect.value) return;
+                    state.organizationDraft.listThemes.forEach((item) => {
+                        item.lessonIds = (item.lessonIds || []).filter((id) => id !== addSelect.value);
+                    });
+                    theme.lessonIds.push(addSelect.value);
+                    renderThemeEditor();
+                });
+                card.querySelector(".theme-remove").addEventListener("click", () => {
+                    if (!window.confirm("Delete category “" + (theme.label || theme.key) + "”? Its guides will need another category.")) return;
+                    state.organizationDraft.listThemes.splice(index, 1);
+                    renderThemeEditor();
+                });
+                card.querySelector(".theme-up").disabled = index === 0;
+                card.querySelector(".theme-down").disabled = index === state.organizationDraft.listThemes.length - 1;
+                card.querySelector(".theme-up").addEventListener("click", () => {
+                    const moved = state.organizationDraft.listThemes.splice(index, 1)[0];
+                    state.organizationDraft.listThemes.splice(index - 1, 0, moved);
+                    renderThemeEditor();
+                });
+                card.querySelector(".theme-down").addEventListener("click", () => {
+                    const moved = state.organizationDraft.listThemes.splice(index, 1)[0];
+                    state.organizationDraft.listThemes.splice(index + 1, 0, moved);
+                    renderThemeEditor();
+                });
+                card.addEventListener("dragstart", (event) => {
+                    if (event.target.closest(".theme-lesson") || ["INPUT", "SELECT", "BUTTON"].includes(event.target.tagName)) {
+                        event.preventDefault();
+                        return;
+                    }
+                    card.classList.add("dragging");
+                    event.dataTransfer.setData("text/plain", JSON.stringify({ type: "theme", key: theme.key }));
+                });
+                card.addEventListener("dragend", () => card.classList.remove("dragging"));
+                card.addEventListener("dragover", (event) => event.preventDefault());
+                card.addEventListener("drop", (event) => {
+                    event.preventDefault();
+                    let payload;
+                    try { payload = JSON.parse(event.dataTransfer.getData("text/plain")); } catch (error) { return; }
+                    if (payload.type === "lesson") {
+                        state.organizationDraft.listThemes.forEach((item) => {
+                            item.lessonIds = (item.lessonIds || []).filter((id) => id !== payload.slug);
+                        });
+                        theme.lessonIds.push(payload.slug);
+                    } else if (payload.type === "theme" && payload.key !== theme.key) {
+                        const fromIndex = state.organizationDraft.listThemes.findIndex((item) => item.key === payload.key);
+                        const moved = state.organizationDraft.listThemes.splice(fromIndex, 1)[0];
+                        const targetIndex = state.organizationDraft.listThemes.findIndex((item) => item.key === theme.key);
+                        state.organizationDraft.listThemes.splice(targetIndex, 0, moved);
+                    }
+                    renderThemeEditor();
+                });
+                return card;
+            }
+
+            function renderThemeEditor() {
+                const container = $("theme-editor");
+                container.innerHTML = "";
+                state.organizationDraft.listThemes.forEach((theme, index) => container.appendChild(createThemeCard(theme, index)));
+                updateOrganizationWarnings();
+                syncAdvancedJsonFromDraft();
+            }
+
+            function renderAgeEditor() {
+                $("age-tabs").innerHTML = "";
+                AGE_KEYS.forEach((key) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "age-tab" + (key === state.activeAgeKey ? " active" : "");
+                    button.textContent = AGE_LABELS[key] + " months";
+                    button.addEventListener("click", () => { state.activeAgeKey = key; renderAgeEditor(); });
+                    $("age-tabs").appendChild(button);
+                });
+                const selected = new Set(state.organizationDraft.phaseHighlights[state.activeAgeKey] || []);
+                $("age-lesson-options").innerHTML = "";
+                sortedLessons().forEach((lesson) => {
+                    const label = document.createElement("label");
+                    const input = document.createElement("input");
+                    input.type = "checkbox";
+                    input.checked = selected.has(lesson.slug);
+                    input.addEventListener("change", () => {
+                        const values = new Set(state.organizationDraft.phaseHighlights[state.activeAgeKey] || []);
+                        if (input.checked) values.add(lesson.slug); else values.delete(lesson.slug);
+                        state.organizationDraft.phaseHighlights[state.activeAgeKey] = Array.from(values);
+                        syncAdvancedJsonFromDraft();
+                    });
+                    label.append(input, document.createTextNode(lesson.title || lesson.slug));
+                    $("age-lesson-options").appendChild(label);
+                });
+            }
+
+            function renderMilestoneEditor() {
+                const container = $("milestone-editor");
+                container.innerHTML = "";
+                AGE_KEYS.forEach((key) => {
+                    const source = state.organizationDraft.milestones[key] || {};
+                    const card = document.createElement("details");
+                    card.className = "milestone-card";
+                    card.innerHTML = [
+                        '<summary>' + AGE_LABELS[key] + ' months</summary>',
+                        '<div class="form-grid milestone-grid">',
+                        '<div class="field full"><label>Title</label><input class="milestone-title"></div>',
+                        '<div class="field"><label>What to expect — one item per line</label><textarea class="milestone-expect"></textarea></div>',
+                        '<div class="field"><label>Remember — one item per line</label><textarea class="milestone-remember"></textarea></div>',
+                        '</div>'
+                    ].join("");
+                    card.querySelector(".milestone-title").value = source.title || "";
+                    card.querySelector(".milestone-expect").value = milestoneItems(source.esperar, source.expectHtml).join("\n");
+                    card.querySelector(".milestone-remember").value = milestoneItems(source.lembrese, source.rememberHtml).join("\n");
+                    const update = () => {
+                        const esperar = splitLines(card.querySelector(".milestone-expect").value);
+                        const lembrese = splitLines(card.querySelector(".milestone-remember").value);
+                        state.organizationDraft.milestones[key] = {
+                            title: card.querySelector(".milestone-title").value.trim(),
+                            esperar,
+                            lembrese,
+                            expectHtml: listHtml(esperar),
+                            rememberHtml: listHtml(lembrese)
+                        };
+                        syncAdvancedJsonFromDraft();
+                    };
+                    card.querySelectorAll("input, textarea").forEach((input) => input.addEventListener("input", update));
+                    container.appendChild(card);
+                });
+            }
+
+            function renderOrganizationEditors() {
+                renderThemeEditor();
+                renderAgeEditor();
+                renderMilestoneEditor();
+            }
+
+            function createSectionRow(section) {
+                const row = document.createElement("div");
+                row.className = "section-row";
+                row.innerHTML = [
+                    '<input class="section-id" aria-label="Section ID" placeholder="fundamentals">',
+                    '<input class="section-title" aria-label="Section title" placeholder="A Base do BLW">',
+                    '<input class="section-subtitle" aria-label="Section subtitle" placeholder="Section description">',
+                    '<input class="section-icon" aria-label="Icon ID" placeholder="leaf">',
+                    '<button class="btn small remove" type="button">Remove</button>',
+                    '<textarea class="section-lessons" aria-label="Guide IDs" placeholder="One guide Stable ID per line"></textarea>'
+                ].join("");
+                row.querySelector(".section-id").value = section && section.id || "";
+                row.querySelector(".section-title").value = section && section.title || "";
+                row.querySelector(".section-subtitle").value = section && section.subtitle || "";
+                row.querySelector(".section-icon").value = section && section.icon || "";
+                row.querySelector(".section-lessons").value = section && Array.isArray(section.lessonIds) ? section.lessonIds.join("\n") : "";
+                row.querySelector(".remove").addEventListener("click", () => {
+                    row.remove();
+                    syncAdvancedJsonFromDraft();
+                });
+                row.addEventListener("input", syncAdvancedJsonFromDraft);
+                sectionsContainer.appendChild(row);
+            }
+
+            function renderJourneyList() {
+                journeyList.innerHTML = "";
+                if (!state.journeys.length) {
+                    journeyList.innerHTML = '<div class="list-empty">No journeys saved yet.</div>';
+                    return;
+                }
+                state.journeys.forEach((journey) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "list-item" + (journey.id === state.selectedJourneyId ? " active" : "");
+                    const title = document.createElement("strong");
+                    title.textContent = journey.title || journey.id || "Untitled journey";
+                    const meta = document.createElement("span");
+                    meta.textContent = (journey.id || "no-id") +
+                        (journey.id === state.defaultJourneyId ? " · Default" : "") +
+                        (journey.published === false ? " · Draft" : "");
+                    button.append(title, meta);
+                    button.addEventListener("click", () => selectJourney(journey.id));
+                    journeyList.appendChild(button);
+                });
+            }
+
+            function clearJourneyForm() {
+                state.selectedJourneyId = null;
+                $("journey-form").reset();
+                $("journey-published").checked = true;
+                $("delete-journey").hidden = true;
+                state.organizationDraft = normalizeJourney({
+                    schemaVersion: 1,
+                    id: "",
+                    title: "",
+                    description: "",
+                    published: true,
+                    sections: [],
+                    listThemes: [],
+                    phaseHighlights: {},
+                    milestones: {}
+                });
+                sectionsContainer.innerHTML = "";
+                createSectionRow();
+                renderOrganizationEditors();
+                renderLessonFilterOptions();
+                renderLessonList();
+                setStatus($("journey-status"), "", "");
+                renderJourneyList();
+            }
+
+            function selectJourney(id) {
+                const journey = state.journeys.find((item) => item.id === id);
+                if (!journey) return;
+                state.selectedJourneyId = id;
+                renderLessonFilterOptions();
+                $("journey-id").value = journey.id || "";
+                $("journey-title").value = journey.title || "";
+                $("journey-description").value = journey.description || "";
+                $("journey-default").checked = journey.id === state.defaultJourneyId;
+                $("journey-published").checked = journey.published !== false;
+                state.organizationDraft = normalizeJourney(journey);
+                $("delete-journey").hidden = false;
+                sectionsContainer.innerHTML = "";
+                (journey.sections || []).forEach(createSectionRow);
+                if (!journey.sections || !journey.sections.length) createSectionRow();
+                renderOrganizationEditors();
+                setStatus($("journey-status"), "", "");
+                renderJourneyList();
+            }
+
+            function parseJsonField(id, label) {
+                const value = $(id).value.trim();
+                if (!value) return {};
+                try {
+                    const parsed = JSON.parse(value);
+                    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error();
+                    return parsed;
+                } catch (error) {
+                    throw new Error(label + " must contain a valid JSON object.");
+                }
+            }
+
+            function parseJsonArrayField(id, label) {
+                try {
+                    const parsed = JSON.parse($(id).value || "[]");
+                    if (!Array.isArray(parsed)) throw new Error();
+                    return parsed;
+                } catch (error) {
+                    throw new Error(label + " must contain a valid JSON array.");
+                }
+            }
+
+            function applyCompleteJourneyJson() {
+                try {
+                    const parsed = JSON.parse($("journey-json").value);
+                    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error();
+                    const draft = normalizeJourney(parsed);
+                    $("journey-id").value = draft.id || "";
+                    $("journey-title").value = draft.title || "";
+                    $("journey-description").value = draft.description || "";
+                    $("journey-published").checked = draft.published !== false;
+                    state.organizationDraft = draft;
+                    sectionsContainer.innerHTML = "";
+                    draft.sections.forEach(createSectionRow);
+                    if (!draft.sections.length) createSectionRow();
+                    renderOrganizationEditors();
+                    setStatus($("journey-status"), "Journey JSON applied. Review and save to publish it.", "success");
+                } catch (error) {
+                    setStatus($("journey-status"), "Complete journey JSON is invalid.", "error");
+                }
+            }
+
+            function readJourneyForm() {
+                const id = normalizeSlug($("journey-id").value);
+                if (!id) throw new Error("A journey ID is required.");
+                const duplicate = state.journeys.find((item) => item.id === id && item.id !== state.selectedJourneyId);
+                if (duplicate) throw new Error("Another journey already uses the ID “" + id + "”.");
+                const sections = readSectionRows();
+                return {
+                    ...clone(state.organizationDraft),
+                    schemaVersion: 1,
+                    id,
+                    title: $("journey-title").value.trim(),
+                    description: $("journey-description").value.trim(),
+                    published: $("journey-published").checked,
+                    sections,
+                    listThemes: clone(state.organizationDraft.listThemes).map((theme, index) => ({ ...theme, order: index })),
+                    phaseHighlights: clone(state.organizationDraft.phaseHighlights),
+                    milestones: clone(state.organizationDraft.milestones)
+                };
+            }
+
+            async function persistJourneys(nextSelectedId, successMessage) {
+                await saveJourneyCollection();
+                state.selectedJourneyId = nextSelectedId || null;
+                renderJourneyList();
+                if (nextSelectedId) selectJourney(nextSelectedId);
+                else clearJourneyForm();
+                setStatus($("journey-status"), successMessage, "success");
+            }
+
+            function validateJourney(journey) {
+                const known = new Set(state.lessons.map((lesson) => lesson.slug));
+                const themeKeys = new Set();
+                const themeAssignments = new Map();
+                journey.listThemes.forEach((theme) => {
+                    if (!theme.key || !theme.label) throw new Error("Every category needs an ID and title.");
+                    if (themeKeys.has(theme.key)) throw new Error("Duplicate category ID: " + theme.key);
+                    themeKeys.add(theme.key);
+                    (theme.lessonIds || []).forEach((id) => {
+                        if (!known.has(id)) throw new Error("Category “" + theme.label + "” references missing guide: " + id);
+                        themeAssignments.set(id, (themeAssignments.get(id) || 0) + 1);
+                    });
+                });
+                const duplicate = Array.from(themeAssignments).find(([, count]) => count > 1);
+                if (duplicate) throw new Error("Guide is assigned to more than one category: " + lessonTitle(duplicate[0]));
+                const uncategorized = state.lessons.filter((lesson) => lesson.published !== false && !themeAssignments.has(lesson.slug));
+                if (uncategorized.length) throw new Error("Assign every published guide to a category. Missing: " + uncategorized.map((lesson) => lesson.title || lesson.slug).join(", "));
+                const sectionAssignments = new Map();
+                journey.sections.forEach((section) => {
+                    if (!section.id || !section.title) throw new Error("Every curriculum section needs an ID and title.");
+                    (section.lessonIds || []).forEach((id) => {
+                        if (!known.has(id)) throw new Error("Curriculum section “" + section.title + "” references missing guide: " + id);
+                        sectionAssignments.set(id, (sectionAssignments.get(id) || 0) + 1);
+                    });
+                });
+                const repeatedSectionLesson = Array.from(sectionAssignments).find(([, count]) => count > 1);
+                if (repeatedSectionLesson) throw new Error("Guide appears in more than one curriculum section: " + lessonTitle(repeatedSectionLesson[0]));
+                const unplaced = state.lessons.filter((lesson) => lesson.published !== false && !sectionAssignments.has(lesson.slug));
+                if (unplaced.length) throw new Error("Choose journey placement for every published guide. Missing: " + unplaced.map((lesson) => lesson.title || lesson.slug).join(", "));
+                Object.entries(journey.phaseHighlights).forEach(([age, ids]) => {
+                    if (!AGE_KEYS.includes(age) || !Array.isArray(ids)) throw new Error("Invalid age highlight entry: " + age);
+                    const missing = ids.find((id) => !known.has(id));
+                    if (missing) throw new Error("Age " + age + " references missing guide: " + missing);
+                });
+            }
+
+            async function syncLessonOrganizationMetadata(journey) {
+                const themeByLesson = new Map();
+                journey.listThemes.forEach((theme) => {
+                    (theme.lessonIds || []).forEach((id) => themeByLesson.set(id, theme));
+                });
+                const phasesByLesson = new Map();
+                AGE_KEYS.forEach((key) => {
+                    (journey.phaseHighlights[key] || []).forEach((id) => {
+                        if (!phasesByLesson.has(id)) phasesByLesson.set(id, []);
+                        phasesByLesson.get(id).push(key);
+                    });
+                });
+                const sectionByLesson = new Map();
+                journey.sections.forEach((section) => {
+                    (section.lessonIds || []).forEach((id) => sectionByLesson.set(id, section.id));
+                });
+                const updates = [];
+                state.lessons.forEach((lesson) => {
+                    const theme = themeByLesson.get(lesson.slug);
+                    const phaseKeys = phasesByLesson.get(lesson.slug) || [];
+                    const sectionKey = sectionByLesson.get(lesson.slug) || "";
+                    const changed = lesson.listThemeKey !== (theme && theme.key || "") ||
+                        JSON.stringify(lesson.phaseKeys || []) !== JSON.stringify(phaseKeys) ||
+                        (lesson.journeySectionKey || "") !== sectionKey;
+                    if (!changed) return;
+                    const { _recordId, ...data } = lesson;
+                    updates.push(updateLesson(_recordId, {
+                        ...data,
+                        listThemeKey: theme && theme.key || "",
+                        listThemeLabel: theme && theme.label || "",
+                        listThemeSubtitle: theme && theme.subtitle || "",
+                        listThemeIcon: theme && theme.icon || "",
+                        phaseKeys,
+                        journeySectionKey: sectionKey,
+                        updatedAt: new Date().toISOString()
+                    }));
+                });
+                await Promise.all(updates);
+            }
+
+            async function handleJourneySave(event) {
+                event.preventDefault();
+                try {
+                    const journey = readJourneyForm();
+                    if (!journey.title) throw new Error("A journey title is required.");
+                    validateJourney(journey);
+                    setBusy(true);
+                    setStatus($("journey-status"), "Saving journey…", "loading");
+                    const existingIndex = state.journeys.findIndex((item) => item.id === state.selectedJourneyId);
+                    if (existingIndex >= 0) state.journeys.splice(existingIndex, 1, journey);
+                    else state.journeys.push(journey);
+                    if ($("journey-default").checked || !state.defaultJourneyId) state.defaultJourneyId = journey.id;
+                    else if (state.selectedJourneyId === state.defaultJourneyId && journey.id !== state.selectedJourneyId) {
+                        state.defaultJourneyId = journey.id;
+                    }
+                    await saveJourneyCollection();
+                    await syncLessonOrganizationMetadata(journey);
+                    await loadLessons();
+                    state.selectedJourneyId = journey.id;
+                    selectJourney(journey.id);
+                    setStatus($("journey-status"), "Organization saved.", "success");
+                } catch (error) {
+                    console.error("Unable to save journey", error);
+                    setStatus($("journey-status"), errorMessage(error), "error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            async function handleJourneyDelete() {
+                const journey = state.journeys.find((item) => item.id === state.selectedJourneyId);
+                if (!journey || !window.confirm("Delete “" + (journey.title || journey.id) + "”?")) return;
+                try {
+                    setBusy(true);
+                    setStatus($("journey-status"), "Deleting journey…", "loading");
+                    state.journeys = state.journeys.filter((item) => item.id !== journey.id);
+                    if (state.defaultJourneyId === journey.id) {
+                        state.defaultJourneyId = state.journeys.length ? state.journeys[0].id : "";
+                    }
+                    await persistJourneys(null, "Journey deleted.");
+                } catch (error) {
+                    console.error("Unable to delete journey", error);
+                    setStatus($("journey-status"), errorMessage(error), "error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            function quizTemplatePayload() {
+                return {
+                    schemaVersion: 1,
+                    exportType: "buildfire-guides-quizzes",
+                    instructions: {
+                        stableId: "Keep an existing quiz id unchanged so saved completion remains connected.",
+                        correct: "Zero-based index into options.",
+                        html: "Question text and feedback may contain trusted formatting HTML. Do not include scripts."
+                    },
+                    quizzes: [{
+                        schemaVersion: 1,
+                        id: "replace-with-unique-quiz-id",
+                        title: "Replace with quiz title",
+                        afterGuideId: "existing-guide-id",
+                        alsoAfterGuideIds: [],
+                        sourceGuideId: "existing-guide-id",
+                        intro: { title: "Ready?", sub: "A short introduction" },
+                        questions: [{
+                            tagKind: "quiz",
+                            tagText: "Question 1",
+                            text: "Question text",
+                            options: ["First option", "Second option"],
+                            correct: 0,
+                            rightTitle: "Correct",
+                            wrongTitle: "Not quite",
+                            why: "Explanation",
+                            did: "Optional fact",
+                            belong: "Optional supportive message"
+                        }],
+                        bonus: null,
+                        results: [{ min: 0, tone: "low", title: "Result", sub: "Result explanation" }],
+                        published: true
+                    }]
+                };
+            }
+
+            function populateQuizLessonSelects(quiz) {
+                const lessons = sortedLessons();
+                ["quiz-after-guide", "quiz-source-guide"].forEach((id) => {
+                    const select = $(id);
+                    select.innerHTML = '<option value="">Choose a guide</option>';
+                    lessons.forEach((lesson) => {
+                        const option = document.createElement("option");
+                        option.value = lesson.slug;
+                        option.textContent = lesson.title || lesson.slug;
+                        select.appendChild(option);
+                    });
+                });
+                const also = $("quiz-also-after");
+                also.innerHTML = "";
+                lessons.forEach((lesson) => {
+                    const option = document.createElement("option");
+                    option.value = lesson.slug;
+                    option.textContent = lesson.title || lesson.slug;
+                    also.appendChild(option);
+                });
+                $("quiz-after-guide").value = quiz && quiz.afterGuideId || "";
+                $("quiz-source-guide").value = quiz && quiz.sourceGuideId || "";
+                const selected = new Set(quiz && quiz.alsoAfterGuideIds || []);
+                Array.from(also.options).forEach((option) => { option.selected = selected.has(option.value); });
+            }
+
+            function renderQuizList() {
+                quizList.innerHTML = "";
+                const search = $("quiz-search").value.trim().toLocaleLowerCase();
+                // Only records returned by BuildFire datastore belong in the
+                // control-panel list. Embedded/extracted definitions stay
+                // invisible until an import has successfully persisted them.
+                const quizzes = state.quizzes.filter((quiz) => quiz._recordId && quiz.id).filter((quiz) => {
+                    return !search || [quiz.title, quiz.id].some((value) => String(value || "").toLocaleLowerCase().includes(search));
+                }).sort((a, b) => String(a.title || a.id).localeCompare(String(b.title || b.id)));
+                if (!quizzes.length) {
+                    quizList.innerHTML = '<div class="list-empty">No quizzes are saved in datastore.</div>';
+                    return;
+                }
+                quizzes.forEach((quiz) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "list-item" + (quiz._recordId === state.selectedQuizId ? " active" : "");
+                    const heading = document.createElement("span");
+                    heading.className = "lesson-list-heading";
+                    const title = document.createElement("strong");
+                    title.textContent = quiz.title || quiz.id || "Untitled quiz";
+                    const edit = document.createElement("span");
+                    edit.className = "lesson-edit-cue";
+                    edit.textContent = "Edit";
+                    const meta = document.createElement("span");
+                    meta.textContent = (quiz.questions || []).length + " questions · " + (quiz.id || "no-id") + (quiz.published === false ? " · Draft" : "");
+                    heading.append(title, edit);
+                    button.append(heading, meta);
+                    button.addEventListener("click", () => selectQuiz(quiz._recordId, true));
+                    quizList.appendChild(button);
+                });
+            }
+
+            function createQuizQuestion(values) {
+                const question = {
+                    tagText: "",
+                    tagKind: "quiz",
+                    scene: "",
+                    text: "",
+                    options: ["", ""],
+                    correct: 0,
+                    rightTitle: "",
+                    wrongTitle: "",
+                    why: "",
+                    did: "",
+                    belong: "",
+                    ...(clone(values) || {})
+                };
+                question.options = Array.isArray(question.options) ? question.options.map((option) => String(option == null ? "" : option)) : ["", ""];
+                while (question.options.length < 2) question.options.push("");
+                question.correct = Number.isInteger(Number(question.correct)) ? Number(question.correct) : 0;
+                if (question.correct < 0 || question.correct >= question.options.length) question.correct = 0;
+                return question;
+            }
+
+            function createQuizResult(values) {
+                return { min: 0, tone: "", title: "", sub: "", ...(clone(values) || {}) };
+            }
+
+            function quizSelectOptions(options, currentValue) {
+                const current = String(currentValue || "");
+                const known = options.some((option) => option[0] === current);
+                return options.map((option) => `<option value="${escapeHtml(option[0])}" ${option[0] === current ? "selected" : ""}>${escapeHtml(option[1])}</option>`).join("")
+                    + (!known ? `<option value="${escapeHtml(current)}" selected>${escapeHtml(current + " (custom)")}</option>` : "");
+            }
+
+            function quizQuestionCard(question, index, settings) {
+                const options = Array.isArray(question.options) ? question.options : [];
+                const card = document.createElement("article");
+                card.className = "quiz-question-card";
+                card.innerHTML = `
+                    <div class="quiz-card-header">
+                        <strong>${escapeHtml(settings.label)}</strong>
+                        <div class="quiz-card-actions">
+                            ${settings.allowMove ? `<button class="btn small" type="button" data-action="up" ${index === 0 ? "disabled" : ""}>Move up</button><button class="btn small" type="button" data-action="down" ${index === settings.total - 1 ? "disabled" : ""}>Move down</button>` : ""}
+                            <button class="btn small danger" type="button" data-action="remove">Remove</button>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="field"><label>Tag text</label><input data-question-field="tagText" value="${escapeHtml(question.tagText || "")}" placeholder="Mito ou verdade"></div>
+                        <div class="field"><label>Tag style</label><select data-question-field="tagKind">${quizSelectOptions([["quiz", "Standard"], ["mito", "Myth"], ["cena", "Scene"], ["bonus", "Bonus"]], question.tagKind)}</select></div>
+                        <div class="field full"><label>Scene or context <span class="quiz-card-note">(optional)</span></label><textarea data-question-field="scene">${escapeHtml(question.scene || "")}</textarea></div>
+                        <div class="field full"><label>Question</label><textarea data-question-field="text" required>${escapeHtml(question.text || "")}</textarea></div>
+                        <div class="field full">
+                            <label>Answer choices</label>
+                            <div class="quiz-options"></div>
+                            <button class="btn small" type="button" data-action="add-option">Add answer choice</button>
+                            <small>Select the radio button beside the correct answer.</small>
+                        </div>
+                    </div>
+                    <details class="advanced">
+                        <summary>Answer feedback</summary>
+                        <div class="quiz-feedback-fields advanced-body">
+                            <div class="field"><label>Correct-answer title</label><input data-question-field="rightTitle" value="${escapeHtml(question.rightTitle || "")}"></div>
+                            <div class="field"><label>Wrong-answer title</label><input data-question-field="wrongTitle" value="${escapeHtml(question.wrongTitle || "")}"></div>
+                            <div class="field full"><label>Explanation</label><textarea data-question-field="why">${escapeHtml(question.why || "")}</textarea></div>
+                            <div class="field full"><label>Did you know?</label><textarea data-question-field="did">${escapeHtml(question.did || "")}</textarea></div>
+                            <div class="field full"><label>Belonging message</label><textarea data-question-field="belong">${escapeHtml(question.belong || "")}</textarea></div>
+                        </div>
+                    </details>`;
+
+                const optionsContainer = card.querySelector(".quiz-options");
+                options.forEach((option, optionIndex) => {
+                    const row = document.createElement("div");
+                    row.className = "quiz-option-row";
+                    row.innerHTML = `<input type="radio" name="${escapeHtml(settings.radioName)}" value="${optionIndex}" aria-label="Mark answer ${optionIndex + 1} as correct" ${Number(question.correct) === optionIndex ? "checked" : ""}><input type="text" value="${escapeHtml(option)}" placeholder="Answer ${optionIndex + 1}" required><button class="btn remove-option" type="button" aria-label="Remove answer ${optionIndex + 1}" ${options.length <= 2 ? "disabled" : ""}>Remove</button>`;
+                    row.querySelector('input[type="radio"]').addEventListener("change", () => { question.correct = optionIndex; });
+                    row.querySelector('input[type="text"]').addEventListener("input", (event) => { question.options[optionIndex] = event.target.value; });
+                    row.querySelector(".remove-option").addEventListener("click", () => {
+                        if (question.options.length <= 2) return;
+                        question.options.splice(optionIndex, 1);
+                        if (question.correct === optionIndex) question.correct = 0;
+                        else if (question.correct > optionIndex) question.correct -= 1;
+                        settings.render();
+                    });
+                    optionsContainer.appendChild(row);
+                });
+
+                card.querySelectorAll("[data-question-field]").forEach((input) => {
+                    input.addEventListener("input", () => { question[input.dataset.questionField] = input.value; });
+                });
+                card.querySelector('[data-action="add-option"]').addEventListener("click", () => {
+                    question.options.push("");
+                    settings.render();
+                });
+                card.querySelector('[data-action="remove"]').addEventListener("click", settings.remove);
+                const up = card.querySelector('[data-action="up"]');
+                const down = card.querySelector('[data-action="down"]');
+                if (up) up.addEventListener("click", () => settings.move(-1));
+                if (down) down.addEventListener("click", () => settings.move(1));
+                return card;
+            }
+
+            function renderQuizQuestions() {
+                const container = $("quiz-questions-editor");
+                container.innerHTML = "";
+                if (!state.quizDraftQuestions.length) container.innerHTML = '<div class="quiz-builder-empty">No questions yet. Add the first question to continue.</div>';
+                state.quizDraftQuestions.forEach((question, index) => {
+                    container.appendChild(quizQuestionCard(question, index, {
+                        label: "Question " + (index + 1),
+                        radioName: "quiz-question-correct-" + index,
+                        allowMove: true,
+                        total: state.quizDraftQuestions.length,
+                        render: renderQuizQuestions,
+                        remove: () => { state.quizDraftQuestions.splice(index, 1); renderQuizQuestions(); },
+                        move: (offset) => {
+                            const next = index + offset;
+                            if (next < 0 || next >= state.quizDraftQuestions.length) return;
+                            [state.quizDraftQuestions[index], state.quizDraftQuestions[next]] = [state.quizDraftQuestions[next], state.quizDraftQuestions[index]];
+                            renderQuizQuestions();
+                        }
+                    }));
+                });
+            }
+
+            function renderQuizBonus() {
+                const container = $("quiz-bonus-editor");
+                const toggle = $("toggle-quiz-bonus");
+                container.innerHTML = "";
+                toggle.textContent = state.quizDraftBonus ? "Remove bonus question" : "Add bonus question";
+                if (!state.quizDraftBonus) {
+                    container.innerHTML = '<div class="quiz-builder-empty">This quiz has no bonus question.</div>';
+                    return;
+                }
+                container.appendChild(quizQuestionCard(state.quizDraftBonus, 0, {
+                    label: "Bonus question",
+                    radioName: "quiz-bonus-correct",
+                    allowMove: false,
+                    total: 1,
+                    render: renderQuizBonus,
+                    remove: () => { state.quizDraftBonus = null; renderQuizBonus(); },
+                    move: () => {}
+                }));
+            }
+
+            function renderQuizResults() {
+                const container = $("quiz-results-editor");
+                container.innerHTML = "";
+                if (!state.quizDraftResults.length) container.innerHTML = '<div class="quiz-builder-empty">No result tiers yet. Add at least one result tier.</div>';
+                state.quizDraftResults.forEach((result, index) => {
+                    const card = document.createElement("article");
+                    card.className = "quiz-result-card";
+                    card.innerHTML = `
+                        <div class="quiz-card-header">
+                            <strong>Result tier ${index + 1}</strong>
+                            <div class="quiz-card-actions">
+                                <button class="btn small" type="button" data-action="up" ${index === 0 ? "disabled" : ""}>Move up</button>
+                                <button class="btn small" type="button" data-action="down" ${index === state.quizDraftResults.length - 1 ? "disabled" : ""}>Move down</button>
+                                <button class="btn small danger" type="button" data-action="remove">Remove</button>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="field"><label>Minimum correct answers</label><input type="number" min="0" step="1" data-result-field="min" value="${escapeHtml(result.min)}" required></div>
+                            <div class="field"><label>Visual tone</label><select data-result-field="tone">${quizSelectOptions([["", "High / default"], ["mid", "Medium"], ["low", "Low"]], result.tone)}</select></div>
+                            <div class="field full"><label>Result title</label><input data-result-field="title" value="${escapeHtml(result.title || "")}" required></div>
+                            <div class="field full"><label>Result message</label><textarea data-result-field="sub">${escapeHtml(result.sub || "")}</textarea></div>
+                        </div>`;
+                    card.querySelectorAll("[data-result-field]").forEach((input) => {
+                        input.addEventListener("input", () => { result[input.dataset.resultField] = input.value; });
+                    });
+                    card.querySelector('[data-action="remove"]').addEventListener("click", () => {
+                        state.quizDraftResults.splice(index, 1);
+                        renderQuizResults();
+                    });
+                    card.querySelector('[data-action="up"]').addEventListener("click", () => moveQuizResult(index, -1));
+                    card.querySelector('[data-action="down"]').addEventListener("click", () => moveQuizResult(index, 1));
+                    container.appendChild(card);
+                });
+            }
+
+            function moveQuizResult(index, offset) {
+                const next = index + offset;
+                if (next < 0 || next >= state.quizDraftResults.length) return;
+                [state.quizDraftResults[index], state.quizDraftResults[next]] = [state.quizDraftResults[next], state.quizDraftResults[index]];
+                renderQuizResults();
+            }
+
+            function renderQuizBuilders() {
+                renderQuizQuestions();
+                renderQuizBonus();
+                renderQuizResults();
+            }
+
+            function clearQuizForm(showEditor) {
+                state.selectedQuizId = null;
+                $("quiz-editor").hidden = showEditor === false;
+                $("quiz-selector").hidden = showEditor !== false;
+                $("quiz-import-export").hidden = showEditor !== false;
+                $("quiz-form").reset();
+                $("quiz-published").checked = true;
+                $("quiz-form-title").textContent = "New quiz";
+                $("save-quiz").textContent = "Create quiz";
+                $("delete-quiz").hidden = true;
+                resetQuizDeleteConfirmation();
+                $("quiz-source").value = "";
+                $("quiz-updated").value = "";
+                $("quiz-intro-note").value = "";
+                state.quizDraftQuestions = [createQuizQuestion()];
+                state.quizDraftBonus = null;
+                state.quizDraftResults = [createQuizResult()];
+                renderQuizBuilders();
+                populateQuizLessonSelects(null);
+                setStatus($("quiz-status"), "", "");
+                renderQuizList();
+            }
+
+            function selectQuiz(recordId, shouldScroll) {
+                const quiz = state.quizzes.find((item) => item._recordId === recordId);
+                if (!quiz) return;
+                state.selectedQuizId = recordId;
+                $("quiz-editor").hidden = false;
+                $("quiz-selector").hidden = true;
+                $("quiz-import-export").hidden = true;
+                $("quiz-form-title").textContent = "Edit quiz";
+                $("save-quiz").textContent = "Save changes";
+                $("delete-quiz").hidden = false;
+                resetQuizDeleteConfirmation();
+                $("quiz-id").value = quiz.id || "";
+                $("quiz-title").value = quiz.title || "";
+                $("quiz-intro-title").value = quiz.intro && quiz.intro.title || "";
+                $("quiz-intro-sub").value = quiz.intro && quiz.intro.sub || "";
+                $("quiz-intro-note").value = quiz.intro && quiz.intro.note || "";
+                state.quizDraftQuestions = (quiz.questions || []).map(createQuizQuestion);
+                state.quizDraftBonus = quiz.bonus ? createQuizQuestion(quiz.bonus) : null;
+                state.quizDraftResults = (quiz.results || []).map(createQuizResult);
+                renderQuizBuilders();
+                $("quiz-published").checked = quiz.published !== false;
+                $("quiz-source").value = quiz.migratedFrom || "Created in CMS";
+                $("quiz-updated").value = quiz.updatedAt ? new Date(quiz.updatedAt).toLocaleString() : "";
+                populateQuizLessonSelects(quiz);
+                setStatus($("quiz-status"), "", "");
+                renderQuizList();
+                if (shouldScroll) requestAnimationFrame(() => $("quiz-editor").scrollIntoView({ behavior: "smooth", block: "start" }));
+            }
+
+            function validateQuizQuestion(question, label) {
+                if (!question || typeof question !== "object" || Array.isArray(question)) throw new Error(label + " must be an object.");
+                if (!String(question.text || "").trim()) throw new Error(label + " needs question text.");
+                if (!Array.isArray(question.options) || question.options.length < 2 || question.options.some((option) => typeof option !== "string" || !option.trim())) {
+                    throw new Error(label + " needs at least two non-empty options.");
+                }
+                if (!Number.isInteger(question.correct) || question.correct < 0 || question.correct >= question.options.length) {
+                    throw new Error(label + " has an invalid zero-based correct answer index.");
+                }
+            }
+
+            function quizFormError(message, fieldId) {
+                const error = new Error(message);
+                error.fieldId = fieldId;
+                return error;
+            }
+
+            function validateQuizDraft(title, afterGuideId, published, questions, bonus, results) {
+                if (!title) throw quizFormError("Enter a quiz title.", "quiz-title");
+                if (published && !afterGuideId) {
+                    throw quizFormError("Choose the guide this published quiz should appear after.", "quiz-after-guide");
+                }
+                if (!questions.length) throw quizFormError("Add at least one question.", "quiz-questions-editor");
+                try {
+                    questions.forEach((question, index) => validateQuizQuestion(question, "Question " + (index + 1)));
+                    if (bonus) validateQuizQuestion(bonus, "Bonus question");
+                } catch (error) {
+                    error.fieldId = "quiz-questions-editor";
+                    throw error;
+                }
+                if (!results.length) throw quizFormError("Add at least one result tier.", "quiz-results-editor");
+                const seenMinimums = new Set();
+                results.forEach((result, index) => {
+                    const label = "Result tier " + (index + 1);
+                    const minimum = Number(result && result.min);
+                    if (!result || String(result.min).trim() === "" || !Number.isInteger(minimum) || minimum < 0) {
+                        throw quizFormError(label + " needs a whole-number minimum score of zero or more.", "quiz-results-editor");
+                    }
+                    if (minimum > questions.length) {
+                        throw quizFormError(label + " cannot require more than " + questions.length + " correct answer(s).", "quiz-results-editor");
+                    }
+                    if (!String(result.title || "").trim()) {
+                        throw quizFormError(label + " needs a result title.", "quiz-results-editor");
+                    }
+                    if (seenMinimums.has(minimum)) {
+                        throw quizFormError("Result tiers cannot use the same minimum score more than once.", "quiz-results-editor");
+                    }
+                    seenMinimums.add(minimum);
+                    result.min = minimum;
+                });
+                if (!seenMinimums.has(0)) {
+                    throw quizFormError("Add a result tier with a minimum score of 0 so every player receives a result.", "quiz-results-editor");
+                }
+                results.sort((a, b) => b.min - a.min);
+            }
+
+            function focusQuizFormError(error) {
+                const target = error && error.fieldId && $(error.fieldId);
+                if (!target) return;
+                requestAnimationFrame(() => {
+                    target.scrollIntoView({ behavior: "smooth", block: "center" });
+                    if (typeof target.focus === "function") target.focus({ preventScroll: true });
+                });
+            }
+
+            function normalizeQuiz(value, index, sourceName) {
+                const label = "Quiz " + (index + 1);
+                if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(label + " must be an object.");
+                const id = String(value.id || "").trim();
+                if (!/^[a-zA-Z0-9._-]{1,120}$/.test(id)) throw new Error(label + " has an invalid stable ID.");
+                const title = String(value.title || "").trim();
+                if (!title) throw new Error(label + " needs a title.");
+                const questions = clone(value.questions || []);
+                if (!Array.isArray(questions) || !questions.length) throw new Error(label + " needs at least one question.");
+                questions.forEach((question, questionIndex) => validateQuizQuestion(question, label + " question " + (questionIndex + 1)));
+                const bonus = value.bonus == null ? null : clone(value.bonus);
+                if (bonus) validateQuizQuestion(bonus, label + " bonus question");
+                const results = clone(value.results || []);
+                if (!Array.isArray(results) || !results.length) throw new Error(label + " needs at least one result tier.");
+                if (results.some((result) => !result || typeof result !== "object" || String(result.min).trim() === "" || !Number.isFinite(Number(result.min)))) {
+                    throw new Error(label + " result tiers need numeric min values.");
+                }
+                results.forEach((result) => { result.min = Number(result.min); });
+                const knownLessons = new Set(state.lessons.map((lesson) => lesson.slug));
+                const afterGuideId = String(value.afterGuideId || "").trim();
+                const sourceGuideId = String(value.sourceGuideId || afterGuideId).trim();
+                const alsoAfterGuideIds = Array.isArray(value.alsoAfterGuideIds) ? value.alsoAfterGuideIds.map(String) : [];
+                [afterGuideId, sourceGuideId, ...alsoAfterGuideIds].filter(Boolean).forEach((lessonId) => {
+                    if (!knownLessons.has(lessonId)) throw new Error(label + " references an unknown guide: " + lessonId);
+                });
+                return {
+                    ...clone(value), schemaVersion: Number(value.schemaVersion) || 1, id, title,
+                    questionCount: questions.length, afterGuideId, alsoAfterGuideIds, sourceGuideId,
+                    intro: value.intro && typeof value.intro === "object" ? clone(value.intro) : {},
+                    questions, bonus, results, published: value.published !== false,
+                    migratedFrom: value.migratedFrom || sourceName || "Created in CMS",
+                    updatedAt: new Date().toISOString()
+                };
+            }
+
+            function readQuizForm() {
+                const existing = state.quizzes.find((item) => item._recordId === state.selectedQuizId);
+                const title = $("quiz-title").value.trim();
+                const id = String($("quiz-id").value || normalizeSlug(title)).trim();
+                const afterGuideId = $("quiz-after-guide").value;
+                const alsoAfterGuideIds = Array.from($("quiz-also-after").selectedOptions).map((option) => option.value);
+                const questions = clone(state.quizDraftQuestions);
+                const bonus = clone(state.quizDraftBonus);
+                const results = clone(state.quizDraftResults);
+                validateQuizDraft(title, afterGuideId, $("quiz-published").checked, questions, bonus, results);
+                const value = {
+                    ...(existing || {}), id, title,
+                    afterGuideId,
+                    alsoAfterGuideIds,
+                    sourceGuideId: $("quiz-source-guide").value || $("quiz-after-guide").value,
+                    intro: {
+                        ...(existing && existing.intro || {}),
+                        title: $("quiz-intro-title").value.trim(),
+                        sub: $("quiz-intro-sub").value.trim(),
+                        note: $("quiz-intro-note").value.trim()
+                    },
+                    questions,
+                    bonus,
+                    results,
+                    published: $("quiz-published").checked,
+                    migratedFrom: existing && existing.migratedFrom || "Created in CMS"
+                };
+                delete value._recordId;
+                const duplicate = state.quizzes.find((item) => item.id === id && item._recordId !== state.selectedQuizId);
+                if (duplicate) throw new Error("Another quiz already uses the ID “" + id + "”.");
+                return normalizeQuiz(value, 0, value.migratedFrom);
+            }
+
+            async function loadQuizzes() {
+                const records = await searchAllQuizzes();
+                state.quizzes = records.map(unwrapQuiz).filter((quiz) => quiz._recordId && quiz.id);
+                renderQuizList();
+            }
+
+            async function handleQuizSave(event) {
+                event.preventDefault();
+                try {
+                    const quiz = readQuizForm();
+                    setBusy(true);
+                    setStatus($("quiz-status"), "Saving quiz…", "loading");
+                    let result;
+                    if (state.selectedQuizId) result = await updateQuiz(state.selectedQuizId, quiz);
+                    else result = await insertQuiz(quiz);
+                    await loadQuizzes();
+                    const savedId = (result && (result.id || result._id)) ||
+                        (state.quizzes.find((item) => item.id === quiz.id) || {})._recordId;
+                    if (savedId) selectQuiz(savedId, false);
+                    setStatus($("quiz-status"), "Quiz saved.", "success");
+                } catch (error) {
+                    console.error("Unable to save quiz", error);
+                    setStatus($("quiz-status"), errorMessage(error), "error");
+                    focusQuizFormError(error);
+                } finally {
+                    setBusy(false);
+                    if (!$("quiz-editor").hidden) renderQuizBuilders();
+                }
+            }
+
+            let quizDeleteConfirmationTimer = null;
+            function resetQuizDeleteConfirmation() {
+                const button = $("delete-quiz");
+                if (!button) return;
+                delete button.dataset.confirmDelete;
+                button.textContent = "Delete";
+                if (quizDeleteConfirmationTimer) clearTimeout(quizDeleteConfirmationTimer);
+                quizDeleteConfirmationTimer = null;
+            }
+
+            async function handleQuizDelete() {
+                const quiz = state.quizzes.find((item) => item._recordId === state.selectedQuizId);
+                if (!quiz) return;
+                const button = $("delete-quiz");
+                if (button.dataset.confirmDelete !== "true") {
+                    button.dataset.confirmDelete = "true";
+                    button.textContent = "Click again to delete";
+                    setStatus($("quiz-status"), "Click Delete again within 8 seconds to remove this quiz. Existing user completion for its ID will no longer be displayed.", "error");
+                    quizDeleteConfirmationTimer = setTimeout(resetQuizDeleteConfirmation, 8000);
+                    return;
+                }
+                resetQuizDeleteConfirmation();
+                try {
+                    setBusy(true);
+                    await deleteQuiz(quiz._recordId);
+                    await loadQuizzes();
+                    clearQuizForm(false);
+                    setStatus($("quiz-status"), "Quiz deleted.", "success");
+                } catch (error) { setStatus($("quiz-status"), errorMessage(error), "error"); }
+                finally { setBusy(false); }
+            }
+
+            function downloadQuizTemplate() {
+                downloadText(JSON.stringify(quizTemplatePayload(), null, 2), "application/json;charset=utf-8", "guides-quiz-template.json");
+                setStatus($("quiz-import-status"), "Quiz template downloaded.", "success");
+            }
+
+            function exportQuizzes() {
+                const payload = quizTemplatePayload();
+                payload.exportedAt = new Date().toISOString();
+                payload.quizzes = state.quizzes.map((quiz) => {
+                    const value = clone(quiz); delete value._recordId; return value;
+                }).sort((a, b) => a.id.localeCompare(b.id));
+                downloadText(JSON.stringify(payload, null, 2), "application/json;charset=utf-8", "guides-quizzes-" + payload.exportedAt.slice(0, 10) + ".json");
+                setStatus($("quiz-import-status"), "Exported " + payload.quizzes.length + " quiz(zes).", "success");
+            }
+
+            async function importQuizValues(values, sourceName) {
+                if (!Array.isArray(values) || !values.length) throw new Error("The JSON file must contain a non-empty quizzes array.");
+                const quizzes = values.map((quiz, index) => normalizeQuiz(quiz, index, "JSON import: " + sourceName));
+                const ids = new Set();
+                quizzes.forEach((quiz) => { if (ids.has(quiz.id)) throw new Error("Duplicate quiz ID in import: " + quiz.id); ids.add(quiz.id); });
+                let created = 0; let updated = 0;
+                for (const quiz of quizzes) {
+                    const existing = state.quizzes.find((item) => item.id === quiz.id);
+                    if (existing) { await updateQuiz(existing._recordId, quiz); updated += 1; }
+                    else { await insertQuiz(quiz); created += 1; }
+                }
+                await loadQuizzes();
+                return { created, updated, total: quizzes.length };
+            }
+
+            async function readQuizImportFile(file) {
+                try {
+                    setBusy(true);
+                    setStatus($("quiz-import-status"), "Validating quiz JSON…", "loading");
+                    const payload = JSON.parse(await file.text());
+                    const result = await importQuizValues(Array.isArray(payload) ? payload : payload.quizzes, file.name);
+                    setStatus($("quiz-import-status"), "Imported " + result.created + " new and updated " + result.updated + " existing quiz(zes).", "success");
+                } catch (error) { setStatus($("quiz-import-status"), errorMessage(error), "error"); }
+                finally { quizImportFileInput.value = ""; setBusy(false); }
+            }
+
+            let quizImportConfirmationTimer = null;
+            async function importHtmlQuizzes() {
+                const button = $("import-html-quizzes");
+                if (button.dataset.confirmImport !== "true") {
+                    button.dataset.confirmImport = "true";
+                    button.textContent = "Click again to import/overwrite";
+                    setStatus($("quiz-import-status"), "This imports all bundled quizzes and overwrites matching quiz IDs. Click again within 8 seconds to continue.", "");
+                    quizImportConfirmationTimer = setTimeout(() => { delete button.dataset.confirmImport; button.textContent = "Import quizzes from HTML"; }, 8000);
+                    return;
+                }
+                clearTimeout(quizImportConfirmationTimer);
+                delete button.dataset.confirmImport;
+                button.textContent = "Import quizzes from HTML";
+                try {
+                    setBusy(true);
+                    setStatus($("quiz-import-status"), "Importing extracted quizzes…", "loading");
+                    const result = await window.importNewQuizData();
+                    await loadQuizzes();
+                    setStatus($("quiz-import-status"), "Imported " + result.results.quizzesInserted.length + " new and updated " + result.results.quizzesUpdated.length + " quiz(zes).", "success");
+                } catch (error) { setStatus($("quiz-import-status"), errorMessage(error), "error"); }
+                finally { setBusy(false); }
+            }
+
+            async function loadLessons() {
+                const records = await searchAllLessons();
+                state.lessons = records.map(unwrapLesson).filter((lesson) => lesson._recordId && lesson.slug);
+                renderLessonList();
+            }
+
+            async function initialize() {
+                if (state.initialized) return;
+                state.initialized = true;
+                setBusy(true);
+                setStatus($("lesson-status"), "Loading CMS content…", "loading");
+                try {
+                    const [records, quizRecords, journeyData, htmlData] = await Promise.all([
+                        searchAllLessons(),
+                        searchAllQuizzes(),
+                        getData(JOURNEY_TAG),
+                        getData(HTML_TAG)
+                    ]);
+                    state.lessons = records.map(unwrapLesson).filter((lesson) => lesson._recordId && lesson.slug);
+                    state.quizzes = quizRecords.map(unwrapQuiz).filter((quiz) => quiz._recordId && quiz.id);
+                    state.journeys = journeyData && Array.isArray(journeyData.journeys) ? journeyData.journeys : [];
+                    state.defaultJourneyId = journeyData && journeyData.defaultJourneyId || "";
+                    renderLessonList();
+                    renderQuizList();
+                    renderJourneyList();
+                    clearLessonForm(false);
+                    clearQuizForm(false);
+                    if (state.defaultJourneyId && state.journeys.some((item) => item.id === state.defaultJourneyId)) {
+                        selectJourney(state.defaultJourneyId);
+                    } else {
+                        clearJourneyForm();
+                    }
+                    showUploadedHtml(htmlData);
+                    setStatus(
+                        $("html-status"),
+                        htmlData && typeof htmlData.html === "string" && htmlData.html.trim()
+                            ? "Choose another file to replace the current HTML shell."
+                            : "No interactive HTML has been uploaded yet.",
+                        ""
+                    );
+                    setStatus($("lesson-status"), state.lessons.length ? "" : "Create the first guide to enable the CMS widget.", "");
+                    setStatus($("quiz-import-status"), state.quizzes.length ? state.quizzes.length + " datastore quiz(zes) loaded." : "No quizzes are saved in datastore.", "");
+                } catch (error) {
+                    console.error("Unable to load guide CMS", error);
+                    setStatus($("lesson-status"), "Unable to load content: " + errorMessage(error), "error");
+                    setStatus($("journey-status"), "Unable to load journeys: " + errorMessage(error), "error");
+                    setStatus($("quiz-status"), "Unable to load quizzes: " + errorMessage(error), "error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            document.querySelectorAll(".guides-cms-tab").forEach((tab) => {
+                tab.addEventListener("click", () => {
+                    document.querySelectorAll(".guides-cms-tab").forEach((item) => item.classList.toggle("active", item === tab));
+                    document.querySelectorAll(".guides-cms-panel").forEach((panel) => panel.classList.toggle("active", panel.id === tab.dataset.panel));
+                });
+            });
+            $("new-lesson").addEventListener("click", () => clearLessonForm(true, true));
+            $("lesson-search").addEventListener("input", renderLessonList);
+            $("lesson-category-filter").addEventListener("change", renderLessonList);
+            $("reset-lesson").addEventListener("click", () => {
+                clearLessonForm(false);
+            });
+            $("lesson-form").addEventListener("submit", handleLessonSave);
+            $("delete-lesson").addEventListener("click", handleLessonDelete);
+            $("new-quiz").addEventListener("click", () => clearQuizForm(true));
+            $("quiz-search").addEventListener("input", renderQuizList);
+            $("reset-quiz").addEventListener("click", () => clearQuizForm(false));
+            $("add-quiz-question").addEventListener("click", () => {
+                state.quizDraftQuestions.push(createQuizQuestion());
+                renderQuizQuestions();
+            });
+            $("toggle-quiz-bonus").addEventListener("click", () => {
+                state.quizDraftBonus = state.quizDraftBonus ? null : createQuizQuestion({ tagText: "Bonus question", tagKind: "bonus" });
+                renderQuizBonus();
+            });
+            $("add-quiz-result").addEventListener("click", () => {
+                state.quizDraftResults.push(createQuizResult());
+                renderQuizResults();
+            });
+            $("quiz-form").addEventListener("submit", handleQuizSave);
+            $("delete-quiz").addEventListener("click", handleQuizDelete);
+            $("quiz-title").addEventListener("blur", () => {
+                if (!$("quiz-id").value.trim()) $("quiz-id").value = normalizeSlug($("quiz-title").value);
+            });
+            $("import-html-quizzes").addEventListener("click", importHtmlQuizzes);
+            $("download-quiz-template").addEventListener("click", downloadQuizTemplate);
+            $("import-quizzes").addEventListener("click", () => quizImportFileInput.click());
+            $("export-quizzes").addEventListener("click", exportQuizzes);
+            quizImportFileInput.addEventListener("change", (event) => {
+                const file = event.target.files && event.target.files[0];
+                if (file) readQuizImportFile(file);
+            });
+            $("new-journey").addEventListener("click", clearJourneyForm);
+            $("reset-journey").addEventListener("click", () => {
+                if (state.selectedJourneyId) selectJourney(state.selectedJourneyId);
+                else clearJourneyForm();
+            });
+            $("journey-form").addEventListener("submit", handleJourneySave);
+            $("delete-journey").addEventListener("click", handleJourneyDelete);
+            $("add-section").addEventListener("click", () => createSectionRow());
+            $("add-theme").addEventListener("click", () => {
+                if (!state.organizationDraft) return;
+                let index = state.organizationDraft.listThemes.length + 1;
+                let key = "tema-novo-" + index;
+                while (state.organizationDraft.listThemes.some((theme) => theme.key === key)) {
+                    index += 1;
+                    key = "tema-novo-" + index;
+                }
+                state.organizationDraft.listThemes.push({ key, label: "New category", subtitle: "", icon: "book", order: index - 1, lessonIds: [] });
+                renderThemeEditor();
+            });
+            $("refresh-journey-json").addEventListener("click", syncAdvancedJsonFromDraft);
+            $("copy-journey-json").addEventListener("click", async () => {
+                syncAdvancedJsonFromDraft();
+                try {
+                    await navigator.clipboard.writeText($("journey-json").value);
+                    setStatus($("journey-status"), "Journey JSON copied.", "success");
+                } catch (error) {
+                    $("journey-json").focus();
+                    $("journey-json").select();
+                    setStatus($("journey-status"), "Select and copy the highlighted JSON.", "");
+                }
+            });
+            $("apply-journey-json").addEventListener("click", applyCompleteJourneyJson);
+            $("phase-highlights").addEventListener("change", () => {
+                try {
+                    state.organizationDraft.phaseHighlights = parseJsonField("phase-highlights", "Phase highlights");
+                    AGE_KEYS.forEach((key) => {
+                        if (!Array.isArray(state.organizationDraft.phaseHighlights[key])) state.organizationDraft.phaseHighlights[key] = [];
+                    });
+                    renderAgeEditor();
+                    syncAdvancedJsonFromDraft();
+                } catch (error) { setStatus($("journey-status"), error.message, "error"); }
+            });
+            $("list-themes-json").addEventListener("change", () => {
+                try {
+                    state.organizationDraft.listThemes = parseJsonArrayField("list-themes-json", "Categories");
+                    renderThemeEditor();
+                } catch (error) { setStatus($("journey-status"), error.message, "error"); }
+            });
+            $("milestones").addEventListener("change", () => {
+                try {
+                    state.organizationDraft.milestones = parseJsonField("milestones", "Milestones");
+                    renderMilestoneEditor();
+                    syncAdvancedJsonFromDraft();
+                } catch (error) { setStatus($("journey-status"), error.message, "error"); }
+            });
+            ["journey-id", "journey-title", "journey-description", "journey-published"].forEach((id) => {
+                $(id).addEventListener("input", syncAdvancedJsonFromDraft);
+                $(id).addEventListener("change", syncAdvancedJsonFromDraft);
+            });
+            $("lesson-title").addEventListener("blur", () => {
+                if (!$("lesson-slug").value.trim()) $("lesson-slug").value = normalizeSlug($("lesson-title").value);
+            });
+            htmlFileInput.addEventListener("change", (event) => {
+                const file = event.target.files && event.target.files[0];
+                if (file && window.GuidesReleaseManager) window.GuidesReleaseManager.stageFile(file);
+                else if (file) readHtmlFile(file);
+            });
+            $("download-html").addEventListener("click", () => {
+                if (window.GuidesReleaseManager) window.GuidesReleaseManager.downloadActiveShell();
+                else downloadUploadedHtml();
+            });
+            $("export-content").addEventListener("click", exportCompleteContent);
+            $("download-lesson-template").addEventListener("click", downloadLessonTemplate);
+            $("import-lessons").addEventListener("click", () => lessonImportFileInput.click());
+            $("export-lessons").addEventListener("click", exportLessons);
+            lessonImportFileInput.addEventListener("change", (event) => {
+                const file = event.target.files && event.target.files[0];
+                if (file) readLessonImportFile(file);
+            });
+
+            if (!window.tinymce) {
+                console.error("BuildFire WYSIWYG editor is unavailable");
+                initialize();
+                setStatus($("lesson-status"), "The WYSIWYG editor could not be loaded; the guide body will use a plain text area.", "error");
+            } else {
+                const editorPromise = tinymce.init({
+                    selector: "#lesson-body",
+                    height: 430,
+                    menubar: false,
+                    plugins: "lists link image media table code",
+                    toolbar: "undo redo | blocks | bold italic underline | bullist numlist | link image media | table | code",
+                    convert_urls: false,
+                    content_style: "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.65}img,video,iframe{max-width:100%;height:auto}blockquote{margin:1em 0;padding:.75em 1em;border-left:3px solid #1abc9c;background:#f3f8f6}hr{border:0;border-top:1px solid #ddd}",
+                    // Infographic components keep their semantic text in bodyHtml while
+                    // the published shell enhances these hooks with icons and bars.
+                    // List the hooks explicitly so editor round trips cannot discard them.
+                    extended_valid_elements: "div[id|class|style|dir|data-ig|data-icon|data-icon-sm|data-bar],span[id|class|style|dir],p[id|class|style|dir],a[id|class|style|href|target|title|rel|data-action-item],img[id|class|style|src|alt|title|width|height|data-bf-image],blockquote[id|class|style|dir],hr[id|class|style],sup[id|class|style]",
+                    setup(editor) {
+                        editor.on("init", initialize);
+                    }
+                });
+                if (editorPromise && typeof editorPromise.catch === "function") {
+                    editorPromise.catch((error) => {
+                        console.error("Unable to initialize WYSIWYG editor", error);
+                        initialize();
+                    });
+                }
+            }
+        }());
+    </script>
+    <script src="release-manager.js"></script>
+</body>
+
+</html>

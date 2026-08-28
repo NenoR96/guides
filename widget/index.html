@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guides</title>
+    <script src="../../../scripts/buildfire.min.js"></script>
+    <style>
+        :root {
+            --brand: #14577c;
+            --accent: #f9a247;
+            --success: #1abc9c;
+            --ink: #27313d;
+            --muted: #6f7885;
+            --surface: #fff;
+            --background: #f6f8fa;
+            --border: #e2e7eb;
+        }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; }
+        body {
+            margin: 0;
+            color: var(--ink);
+            background: var(--background);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        button { font: inherit; cursor: pointer; }
+        .app { min-height: 100vh; }
+        .state {
+            display: grid;
+            min-height: 100vh;
+            place-content: center;
+            padding: 28px;
+            text-align: center;
+        }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            margin: 0 auto 16px;
+            border: 3px solid #dfe4ea;
+            border-top-color: var(--brand);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        .state h1 { margin: 0 0 8px; font-size: 20px; }
+        .state p { max-width: 360px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .home-header {
+            padding: 28px 20px 42px;
+            color: #fff;
+            background: linear-gradient(145deg, #14577c, #1b6f91);
+        }
+        .home-header-inner { max-width: 720px; margin: 0 auto; }
+        .eyebrow {
+            margin-bottom: 8px;
+            color: rgba(255,255,255,.76);
+            font-size: 12px;
+            font-weight: 750;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .home-header h1 { margin: 0 0 8px; font-size: clamp(25px, 7vw, 34px); line-height: 1.15; }
+        .home-header p { max-width: 580px; margin: 0; color: rgba(255,255,255,.86); font-size: 14px; line-height: 1.5; }
+        .progress-card {
+            max-width: 720px;
+            margin: -22px auto 20px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: var(--surface);
+            box-shadow: 0 8px 24px rgba(24, 44, 60, .09);
+        }
+        .progress-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 9px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .progress-track { height: 8px; overflow: hidden; border-radius: 99px; background: #e7ecef; }
+        .progress-fill { height: 100%; border-radius: inherit; background: var(--success); transition: width .25s; }
+        .content { max-width: 720px; margin: 0 auto; padding: 0 14px 34px; }
+        .journey-section {
+            margin-bottom: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--surface);
+        }
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 15px;
+            font-weight: 800;
+        }
+        .section-heading {
+            display: grid;
+            gap: 2px;
+        }
+        .section-heading small {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 400;
+        }
+        .section-icon {
+            display: grid;
+            width: 32px;
+            height: 32px;
+            place-items: center;
+            border-radius: 50%;
+            color: var(--brand);
+            background: #eaf3f7;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .lesson-list { display: grid; }
+        .lesson {
+            display: grid;
+            grid-template-columns: 38px minmax(0, 1fr) auto;
+            gap: 11px;
+            align-items: center;
+            width: 100%;
+            padding: 13px 15px;
+            border: 0;
+            border-bottom: 1px solid #edf0f2;
+            color: inherit;
+            background: #fff;
+            text-align: left;
+        }
+        .lesson:last-child { border-bottom: 0; }
+        .lesson:active { background: #f5f8fa; }
+        .lesson.done .lesson-mark { color: #fff; background: var(--success); }
+        .lesson-mark {
+            display: grid;
+            width: 36px;
+            height: 36px;
+            place-items: center;
+            border-radius: 50%;
+            color: var(--brand);
+            background: #edf4f7;
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .lesson-copy strong { display: block; margin-bottom: 4px; font-size: 14px; line-height: 1.3; }
+        .lesson-copy span { display: block; color: var(--muted); font-size: 11px; }
+        .lesson-arrow { color: #9aa2ad; font-size: 20px; }
+        .badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            color: #89530d;
+            background: #fff0d7;
+            font-size: 9px;
+            vertical-align: 2px;
+        }
+        .reader { min-height: 100vh; background: #fff; }
+        .reader-nav {
+            position: sticky;
+            z-index: 5;
+            top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 13px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255,255,255,.96);
+            backdrop-filter: blur(8px);
+        }
+        .back {
+            width: 38px;
+            height: 38px;
+            border: 0;
+            border-radius: 50%;
+            color: var(--brand);
+            background: #edf4f7;
+            font-size: 20px;
+        }
+        .reader-nav strong {
+            min-width: 0;
+            overflow: hidden;
+            font-size: 14px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .reader-main { max-width: 720px; margin: 0 auto; padding: 26px 20px 42px; }
+        .reader-meta { margin-bottom: 9px; color: var(--brand); font-size: 12px; font-weight: 750; }
+        .reader-main h1 { margin: 0 0 10px; font-size: clamp(26px, 8vw, 38px); line-height: 1.14; }
+        .takeaways {
+            margin: 0 0 24px;
+            padding: 16px 18px;
+            border: 1px solid #cfe7e1;
+            border-radius: 12px;
+            background: #f1fbf8;
+        }
+        .takeaways strong { display: block; margin-bottom: 8px; color: #137b66; }
+        .takeaways ul { margin: 0; padding-left: 19px; }
+        .takeaways li { margin: 5px 0; font-size: 14px; line-height: 1.45; }
+        .rich-text { overflow-wrap: anywhere; color: #333d48; font-size: 16px; line-height: 1.65; }
+        .rich-text h2, .rich-text h3 { margin-top: 1.5em; line-height: 1.25; }
+        .rich-text img, .rich-text video, .rich-text iframe { max-width: 100%; height: auto; }
+        .rich-text p { margin: 0 0 1em; }
+        .rich-text a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+        .rich-text blockquote { margin: 1.25em 0; padding: 12px 16px; border-left: 3px solid var(--brand); border-radius: 0 10px 10px 0; background: #f1f7f8; }
+        .rich-text blockquote p:last-child { margin-bottom: 0; }
+        .rich-text hr { margin: 24px 0; border: 0; border-top: 1px solid var(--border); }
+        .rich-text sup { line-height: 0; }
+        .rich-text [id] { scroll-margin-top: 72px; }
+        .rich-text table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+        .rich-text td, .rich-text th { padding: 7px; border: 1px solid var(--border); }
+        .complete {
+            width: 100%;
+            margin-top: 30px;
+            padding: 13px 16px;
+            border: 0;
+            border-radius: 10px;
+            color: #fff;
+            background: var(--brand);
+            font-weight: 800;
+        }
+        .complete.done { background: var(--success); }
+        .empty-section { padding: 18px; color: var(--muted); font-size: 13px; }
+    </style>
+</head>
+
+<body>
+    <main class="app" id="app">
+        <section class="state">
+            <div class="spinner"></div>
+            <h1>Loading guides…</h1>
+            <p>Retrieving journeys and guides for this plugin.</p>
+        </section>
+    </main>
+
+    <script src="release-runtime.js"></script>
+    <script>
+        (function () {
+            "use strict";
+
+            // The permanent release runtime owns persistence and rendering for
+            // both contract shells and legacy uploads. Keep the implementation
+            // below as an emergency fallback for older cached plugin bundles.
+            if (window.GuidesReleaseRuntime && window.GuidesReleaseRuntime.start()) return;
+
+            // Persisted compatibility name: "lesson" records are guides in product terminology.
+            const LESSON_TAG = "guideLessons";
+            const JOURNEY_TAG = "guideJourneys";
+            const LEGACY_TAG = "interactiveGuideHtml";
+            // Keep the legacy progress tag/field so migrating content does not
+            // reset guides that a user already completed.
+            const PROGRESS_TAG = "reading-progress";
+            const LOCAL_PROGRESS_PREFIX = "guides:readGuides";
+            const PAGE_SIZE = 50;
+            const app = document.getElementById("app");
+            const state = {
+                lessons: [],
+                lessonById: new Map(),
+                journeyData: null,
+                journey: null,
+                completed: new Set(),
+                progressData: {},
+                localProgressKey: LOCAL_PROGRESS_PREFIX + ":anonymous",
+                activeScreen: "home"
+            };
+
+            function escapeHtml(value) {
+                return String(value == null ? "" : value)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            function parseActionItem(value) {
+                const source = String(value || "").trim();
+                const candidates = [source];
+                try { candidates.push(decodeURIComponent(source)); } catch (error) { /* legacy Latin-1 encoding */ }
+                if (typeof window.unescape === "function") candidates.push(window.unescape(source));
+                for (const candidate of candidates) {
+                    try {
+                        const parsed = JSON.parse(candidate);
+                        if (parsed && typeof parsed === "object") return parsed;
+                    } catch (error) { /* try the next supported encoding */ }
+                }
+                return null;
+            }
+
+            function prepareGuideContent(content) {
+                if (!content) return;
+                content.querySelectorAll("script").forEach((script) => script.remove());
+                content.querySelectorAll("*").forEach((element) => {
+                    Array.from(element.attributes).forEach((attribute) => {
+                        const name = attribute.name.toLowerCase();
+                        const value = attribute.value.trim().toLowerCase();
+                        if (name.startsWith("on") || name === "srcdoc") element.removeAttribute(attribute.name);
+                        else if (["href", "src", "xlink:href"].includes(name) && value.startsWith("javascript:")) {
+                            element.removeAttribute(attribute.name);
+                        }
+                    });
+                });
+                if (buildfire.navigation && typeof buildfire.navigation.makeSafeLinks === "function") {
+                    buildfire.navigation.makeSafeLinks(content);
+                }
+                content.addEventListener("click", (event) => {
+                    const link = event.target.closest && event.target.closest("a");
+                    if (!link || !content.contains(link)) return;
+                    const encodedAction = link.getAttribute("data-action-item");
+                    if (encodedAction) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        const action = parseActionItem(encodedAction);
+                        if (action && buildfire.actionItems && typeof buildfire.actionItems.execute === "function") {
+                            buildfire.actionItems.execute(action, () => { });
+                        }
+                        return;
+                    }
+                    const href = link.getAttribute("href") || "";
+                    if (href.length > 1 && href.charAt(0) === "#") {
+                        const target = document.getElementById(decodeURIComponent(href.slice(1)));
+                        if (target && content.contains(target)) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                            target.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                    }
+                }, true);
+            }
+
+            function getData(tag) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.get(tag, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result && result.data ? result.data : null);
+                    });
+                });
+            }
+
+            function searchPage(page) {
+                return new Promise((resolve, reject) => {
+                    buildfire.datastore.search({ page, pageSize: PAGE_SIZE }, LESSON_TAG, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(Array.isArray(result) ? result : ((result && result.result) || []));
+                    });
+                });
+            }
+
+            async function searchAllLessons() {
+                const records = [];
+                for (let page = 0; ; page += 1) {
+                    const batch = await searchPage(page);
+                    records.push(...batch);
+                    if (batch.length < PAGE_SIZE) break;
+                }
+                return records.map((record) => record && record.data ? record.data : record);
+            }
+
+            function getCurrentUser() {
+                return new Promise((resolve) => {
+                    if (!buildfire.auth || typeof buildfire.auth.getCurrentUser !== "function") return resolve(null);
+                    buildfire.auth.getCurrentUser((error, user) => resolve(error ? null : (user || null)));
+                });
+            }
+
+            function progressOwnerKey(user) {
+                const id = user && (user._id || user.id || user.userId || user.email);
+                return id ? "user:" + encodeURIComponent(String(id)) : "anonymous";
+            }
+
+            async function loadProgress() {
+                const user = await getCurrentUser();
+                state.localProgressKey = LOCAL_PROGRESS_PREFIX + ":" + progressOwnerKey(user);
+                try {
+                    state.completed = new Set(JSON.parse(localStorage.getItem(state.localProgressKey) || "[]"));
+                } catch (error) {
+                    state.completed = new Set();
+                }
+                return new Promise((resolve) => {
+                    if (!buildfire.userData) return resolve();
+                    buildfire.userData.get(PROGRESS_TAG, (error, result) => {
+                        if (!error && result && result.data) {
+                            state.progressData = result.data;
+                            const remoteIds = result.data.readGuides || result.data.readLessons || [];
+                            remoteIds.forEach((id) => state.completed.add(id));
+                            localStorage.setItem(state.localProgressKey, JSON.stringify(Array.from(state.completed)));
+                        }
+                        resolve();
+                    });
+                });
+            }
+
+            function saveProgress() {
+                const readLessons = Array.from(state.completed);
+                localStorage.setItem(state.localProgressKey, JSON.stringify(readLessons));
+                if (buildfire.userData) {
+                    state.progressData = { ...state.progressData, readGuides: readLessons };
+                    buildfire.userData.save(state.progressData, PROGRESS_TAG, (error) => {
+                        if (error) console.error("Unable to save guide progress", error);
+                    });
+                }
+            }
+
+            function deriveSections() {
+                const configured = state.journey && Array.isArray(state.journey.sections) ? state.journey.sections : [];
+                const seen = new Set();
+                const sections = configured.map((section) => {
+                    const lessons = (section.lessonIds || []).map((id) => state.lessonById.get(id)).filter(Boolean);
+                    lessons.forEach((lesson) => seen.add(lesson.slug));
+                    return { ...section, lessons };
+                });
+                const unassigned = state.lessons.filter((lesson) => !seen.has(lesson.slug));
+                if (unassigned.length) {
+                    sections.push({ id: "library", title: configured.length ? "More guides" : "All guides", icon: "book", lessons: unassigned });
+                }
+                return sections;
+            }
+
+            function lessonRow(lesson) {
+                const done = state.completed.has(lesson.slug);
+                const icon = done ? "✓" : (lesson.icon ? lesson.icon.slice(0, 2) : "•");
+                return [
+                    '<button class="lesson' + (done ? " done" : "") + '" type="button" data-lesson-id="' + escapeHtml(lesson.slug) + '">',
+                    '<span class="lesson-mark">' + escapeHtml(icon) + '</span>',
+                    '<span class="lesson-copy"><strong>' + escapeHtml(lesson.title),
+                    lesson.premium ? '<span class="badge">Premium</span>' : "",
+                    '</strong><span>' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(" · ")) + '</span></span>',
+                    '<span class="lesson-arrow">›</span>',
+                    '</button>'
+                ].join("");
+            }
+
+            function renderHome() {
+                state.activeScreen = "home";
+                const sections = deriveSections();
+                const completedCount = state.lessons.filter((lesson) => state.completed.has(lesson.slug)).length;
+                const percentage = state.lessons.length ? Math.round(completedCount / state.lessons.length * 100) : 0;
+                const title = state.journey && state.journey.title || "Interactive guides";
+                const description = state.journey && state.journey.description || "Explore all available guides.";
+                app.innerHTML = [
+                    '<section>',
+                    '<header class="home-header"><div class="home-header-inner">',
+                    '<div class="eyebrow">Your journey</div>',
+                    '<h1>' + escapeHtml(title) + '</h1>',
+                    '<p>' + escapeHtml(description) + '</p>',
+                    '</div></header>',
+                    '<div class="content">',
+                    '<div class="progress-card"><div class="progress-row"><span>Journey progress</span><span>' +
+                        completedCount + " of " + state.lessons.length + '</span></div>',
+                    '<div class="progress-track"><div class="progress-fill" style="width:' + percentage + '%"></div></div></div>',
+                    sections.map((section) => [
+                        '<section class="journey-section">',
+                        '<div class="section-title"><span class="section-icon">' + escapeHtml((section.icon || "•").slice(0, 2)) + '</span>' +
+                            '<span class="section-heading"><span>' + escapeHtml(section.title || section.id || "Section") + '</span>' +
+                            (section.subtitle ? '<small>' + escapeHtml(section.subtitle) + '</small>' : '') + '</span></div>',
+                        '<div class="lesson-list">',
+                        section.lessons.length ? section.lessons.map(lessonRow).join("") : '<div class="empty-section">No published guides in this section.</div>',
+                        '</div></section>'
+                    ].join("")).join(""),
+                    '</div></section>'
+                ].join("");
+                app.querySelectorAll("[data-lesson-id]").forEach((button) => {
+                    button.addEventListener("click", () => renderReader(button.dataset.lessonId));
+                });
+                window.scrollTo(0, 0);
+            }
+
+            function renderReader(slug) {
+                const lesson = state.lessonById.get(slug);
+                if (!lesson) return renderHome();
+                state.activeScreen = "reader";
+                const done = state.completed.has(slug);
+                const takeaways = Array.isArray(lesson.tldr) && lesson.tldr.length ? [
+                    '<aside class="takeaways"><strong>Key takeaways</strong><ul>',
+                    lesson.tldr.map((item) => '<li>' + escapeHtml(item) + '</li>').join(""),
+                    '</ul></aside>'
+                ].join("") : "";
+                app.innerHTML = [
+                    '<article class="reader">',
+                    '<nav class="reader-nav"><button class="back" id="reader-back" type="button" aria-label="Back">‹</button><strong>' +
+                        escapeHtml(lesson.title) + '</strong></nav>',
+                    '<main class="reader-main">',
+                    '<div class="reader-meta">' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(" · ")) + '</div>',
+                    '<h1>' + escapeHtml(lesson.title) + '</h1>',
+                    takeaways,
+                    '<div class="rich-text" id="lesson-content">' + (lesson.bodyHtml || "") + '</div>',
+                    '<button class="complete' + (done ? " done" : "") + '" id="toggle-complete" type="button">' +
+                        (done ? "✓ Completed" : "Mark as completed") + '</button>',
+                    '</main></article>'
+                ].join("");
+                document.getElementById("reader-back").addEventListener("click", renderHome);
+                document.getElementById("toggle-complete").addEventListener("click", () => {
+                    if (state.completed.has(slug)) state.completed.delete(slug);
+                    else state.completed.add(slug);
+                    saveProgress();
+                    renderReader(slug);
+                });
+                prepareGuideContent(document.getElementById("lesson-content"));
+                window.scrollTo(0, 0);
+            }
+
+            function showState(title, message) {
+                app.innerHTML = '<section class="state"><h1>' + escapeHtml(title) + '</h1><p>' + escapeHtml(message) + '</p></section>';
+            }
+
+            function injectBuildFireBridge(html) {
+                const bootstrap = [
+                    '<script>(function(){',
+                    'if(typeof buildfire!=="undefined"&&buildfire._postMessageHandler){',
+                    'window.removeEventListener("message",buildfire._postMessageHandler,false);',
+                    'window.addEventListener("message",buildfire._postMessageHandler,false);',
+                    '}',
+                    '}());<\/script>'
+                ].join("");
+                return /<head\b[^>]*>/i.test(html) ?
+                    html.replace(/<head\b[^>]*>/i, (head) => head + bootstrap) :
+                    bootstrap + html;
+            }
+
+            function renderLegacy(html) {
+                document.open();
+                document.write(injectBuildFireBridge(html));
+                document.close();
+            }
+
+            async function loadCms() {
+                try {
+                    // The uploaded interactive HTML is the primary UI shell.
+                    // It now hydrates its own guide/journey model from the same
+                    // datastore records loaded by the control panel.
+                    const legacy = await getData(LEGACY_TAG);
+                    if (legacy && typeof legacy.html === "string" && legacy.html.trim()) {
+                        renderLegacy(legacy.html);
+                        return;
+                    }
+
+                    const [lessons, journeyData] = await Promise.all([
+                        searchAllLessons(),
+                        getData(JOURNEY_TAG),
+                        loadProgress()
+                    ]);
+                    state.lessons = lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false);
+                    state.lessonById = new Map(state.lessons.map((lesson) => [lesson.slug, lesson]));
+                    state.journeyData = journeyData || { journeys: [] };
+                    const publishedJourneys = (state.journeyData.journeys || []).filter((journey) => journey.published !== false);
+                    state.journey = publishedJourneys.find((journey) => journey.id === state.journeyData.defaultJourneyId) || publishedJourneys[0] || null;
+
+                    if (state.lessons.length) {
+                        renderHome();
+                        return;
+                    }
+                    showState("No guides published", "Add and publish guides from the plugin Content section.");
+                } catch (error) {
+                    console.error("Unable to load guide content", error);
+                    showState("Guides unavailable", "The content could not be loaded. Please try again.");
+                }
+            }
+
+            loadCms();
+            if (buildfire.navigation) {
+                buildfire.navigation.onBackButtonClick = () => {
+                    if (state.activeScreen === "reader") renderHome();
+                    else if (typeof buildfire.navigation.navigateHome === "function") buildfire.navigation.navigateHome();
+                };
+            }
+            buildfire.datastore.onUpdate(() => window.location.reload());
+            if (buildfire.auth) {
+                if (typeof buildfire.auth.onLogin === "function") buildfire.auth.onLogin(() => window.location.reload());
+                if (typeof buildfire.auth.onLogout === "function") buildfire.auth.onLogout(() => window.location.reload());
+            }
+        }());
+    </script>
+</body>
+
+</html>

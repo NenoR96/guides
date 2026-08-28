@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!--
+		NOTE:
+		1. You can reference the file in SDK via relative path
+		2. The Control and Widget Should NOT share resources. They will be separated in production.
+		3. You may include any JS framework you want with your Widget and Control folders. However, keep in mind
+		    to keep you plugin as light weight as possible for performance and transport reasons
+	-->
+
+    <!-- You can load helper.css to use our helper classes.
+    <link href="../../../../styles/helper.css" rel="stylesheet">
+    -->
+
+    <!-- JS -->
+
+    <!-- ... -->
+    <script src="../../../../scripts/buildfire.min.js"></script>
+    <script src="../../../../scripts/sortable.min.js"></script>
+
+    <link rel="stylesheet" href="../../../../styles/components/control/listView/listView.css">
+    </link>
+    <script src="../../../../scripts/buildfire/components/control/listView/listView.js"></script>
+    <!--
+    <script src="../../../../scripts/angular/angular.min.js"></script>
+    <script src="../../../../scripts/angular/ui-bootstrap.min.js"></script>
+
+   <script src="../../../../scripts/jquery/jquery-1.11.2.min.js"></script>
+   -->
+</head>
+
+<body>
+    <span>Content - Hello world!</span>
+    <div id="listView_container"></div>
+    <script>
+        const items = [
+            {
+                "id": "6489fe794feadf03a7df37cc",
+                "data": {
+                    "createdOn": "05/06/2023",
+                    "isActive": false,
+                    "imageUrl": "http://placehold.it/32x32",
+                    "title": "Bridgett Lara",
+                    "subtitle": "SNIPS",
+                    "address": "362 Utica Avenue, Beaulieu, Oklahoma, 4949",
+                    "manualOrder": 0
+                }
+            },
+            {
+                "id": "6489fe79fb32d8039fdc4c94",
+                "data": {
+                    "createdOn": "05/06/2023",
+                    "isActive": true,
+                    "imageUrl": "http://placehold.it/32x32",
+                    "title": "Cameron Mayer",
+                    "subtitle": "EXOTERIC",
+                    "address": "421 Beaumont Street, Linwood, North Carolina, 913",
+                    "manualOrder": 1
+                }
+            },
+            {
+                "id": "6489fe794feadf03a7df37cd",
+                "data": {
+                    "createdOn": "05/06/2023",
+                    "isActive": true,
+                    "imageUrl": "http://placehold.it/32x32",
+                    "title": "Carla Wilkinson",
+                    "subtitle": "COMVEY",
+                    "address": "820 Virginia Place, Tryon, Indiana, 1631",
+                    "manualOrder": 2
+                }
+            }
+        ];
+
+        const options = {
+            appearance: {
+                title: 'Control List View',
+                info: "Some description of the control list",
+                addButtonText: "Add Feed",
+                addButtonStyle: "outlined",
+                itemImageEditable: false,
+            },
+            addButtonOptions: [
+                { title: "Add New" },
+            ],
+            settings: {
+                allowDragAndDrop: true,
+                showSearchBar: true,
+                showSortOptions: true,
+                showAddButton: true,
+                showEditButton: true,
+                showDeleteButton: true,
+                contentMapping: {
+                    idKey: "id",
+                    manualOrderKey: "data.manualOrder",
+                    columns: [
+                        { imageKey: "data.imageUrl" },
+                        { titleKey: "data.title", subtitleKey: "data.subtitle" },
+                        { dateKey: "data.createdOn", anchorKey: "data.address" },
+                        { toggleKey: "data.isActive" }
+                    ],
+                }
+            },
+            sortOptions: [
+                { title: "Newest First", },
+                { title: "Oldest Z-A", default: true }
+            ]
+        }
+
+        let controlListView = new buildfire.components.control.listView("#listView_container", options);
+
+        controlListView.onDataRequest = (event, callback) => {
+            callback(items);
+        };
+
+        controlListView.onItemRender = (event, callback) => {
+            let presetOptions = {
+                disableDelete: true,
+                disableEdit: false
+            };
+
+            let actions = [
+                { actionId: "calendar", icon: "calendar", theme: "primary", disabled: true },
+                { actionId: "graph", icon: "graph", theme: "primary" }
+            ];
+
+            return { actions, presetOptions };
+        };
+    </script>
+</body>
+
+</html>

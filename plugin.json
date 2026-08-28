@@ -1,0 +1,20 @@
+{
+	"author": "Daniel Hindi",
+	"pluginName": "Interactive Guides [Dev]",
+	"pluginDescription": "AI-managed, versioned interactive learning guides with persistent content and user progress",
+	"supportEmail": "devSupport@buildfire.com",
+	"control": {
+		"content": {
+			"enabled": true
+		},
+		"design": {
+			"enabled": false
+		},
+		"settings": {
+			"enabled": false
+		}
+	},
+	"widget": {},
+	"features": [],
+	"languages": ["en"]
+}
