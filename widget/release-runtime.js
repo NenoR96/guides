@@ -21,6 +21,52 @@
         readerScrollPositions: "guides:readerScrollPositions"
     };
     let started = false;
+    let runtimeState = null;
+    let startupDeepLink = null;
+
+    function deepLinkFromValue(value) {
+        const data = value && value.deeplinkData ? value.deeplinkData : value;
+        if (!data) return null;
+        if (data.type === "quiz") {
+            const quizId = String(data.quizId || "").trim();
+            return /^[a-zA-Z0-9._-]{1,120}$/.test(quizId) ? { type: "quiz", quizId } : null;
+        }
+        if (data.type && data.type !== "guide") return null;
+        const guideId = String(data.guideId || data.slug || "").trim();
+        return /^[a-zA-Z0-9._-]{1,120}$/.test(guideId) ? { type: "guide", guideId } : null;
+    }
+
+    function guideIdFromDeepLink(value) {
+        const deepLink = deepLinkFromValue(value);
+        return deepLink && deepLink.type === "guide" ? deepLink.guideId : null;
+    }
+
+    function receiveDeepLink(value) {
+        const deepLink = deepLinkFromValue(value);
+        if (!deepLink) return;
+        if (!runtimeState) {
+            startupDeepLink = deepLink;
+            return;
+        }
+        runtimeState.pendingDeepLink = deepLink;
+        if (runtimeState.shellReady && runtimeState.frame) {
+            sendFrame(runtimeState.frame, { type: "deeplink", data: deepLink });
+            runtimeState.pendingDeepLink = null;
+        } else if (deepLink.type === "guide" && typeof runtimeState.openGuide === "function") {
+            runtimeState.openGuide(deepLink.guideId);
+            runtimeState.pendingDeepLink = null;
+        }
+    }
+
+    function listenForDeepLinks() {
+        if (!buildfire.deeplink) return;
+        if (typeof buildfire.deeplink.getData === "function") {
+            buildfire.deeplink.getData(receiveDeepLink);
+        }
+        if (typeof buildfire.deeplink.onUpdate === "function") {
+            buildfire.deeplink.onUpdate(receiveDeepLink, true);
+        }
+    }
 
     function getData(tag) {
         return new Promise((resolve, reject) => {
@@ -98,6 +144,38 @@
         return null;
     }
 
+    function guideIdFromActionItem(action) {
+        if (!action || typeof action !== "object" || Array.isArray(action)) return null;
+        const context = buildfire.getContext && buildfire.getContext() || {};
+        const currentInstanceId = String(context.instanceId || context.pluginInstanceId || "");
+        const targetInstanceId = String(action.instanceId || "");
+        if (currentInstanceId && targetInstanceId && currentInstanceId !== targetInstanceId) return null;
+
+        if (action.deeplinkData) {
+            const directId = guideIdFromDeepLink(action.deeplinkData);
+            if (directId) return directId;
+        }
+
+        const queryString = String(action.queryString || "").replace(/^\?/, "");
+        if (queryString) {
+            try {
+                const encoded = new URLSearchParams(queryString).get("dld");
+                if (encoded) {
+                    let decoded = encoded;
+                    try { decoded = decodeURIComponent(decoded); } catch (error) { /* URLSearchParams may already decode it */ }
+                    const deepLinkData = JSON.parse(decoded);
+                    const queryId = guideIdFromDeepLink(deepLinkData);
+                    if (queryId) return queryId;
+                }
+            } catch (error) { /* fall back to the registered deep-link ID */ }
+        }
+
+        const deeplinkId = String(action.deeplinkId || "");
+        return deeplinkId.startsWith("guide-")
+            ? guideIdFromDeepLink({ type: "guide", guideId: deeplinkId.slice(6) })
+            : null;
+    }
+
     function prepareGuideContent(content) {
         if (!content) return;
         content.querySelectorAll("script").forEach((script) => script.remove());
@@ -122,7 +200,10 @@
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 const action = parseActionItem(encodedAction);
-                if (action && buildfire.actionItems && typeof buildfire.actionItems.execute === "function") {
+                const internalGuideId = guideIdFromActionItem(action);
+                if (internalGuideId) {
+                    receiveDeepLink({ type: "guide", guideId: internalGuideId });
+                } else if (action && buildfire.actionItems && typeof buildfire.actionItems.execute === "function") {
                     buildfire.actionItems.execute(action, () => { });
                 }
                 return;
@@ -159,7 +240,10 @@
             currentUser: null,
             entitlements: { hasSubscriptions: false, subscriptions: [] },
             activeRelease: null,
-            frame: null
+            frame: null,
+            shellReady: false,
+            openGuide: null,
+            pendingDeepLink: startupDeepLink
         };
     }
 
@@ -252,7 +336,8 @@
             profile: { babyBirthdate: state.preferences.babyBirthdate || null },
             preferences: clone(state.preferences),
             currentUser: publicUser(state.currentUser),
-            entitlements: clone(state.entitlements)
+            entitlements: clone(state.entitlements),
+            deepLink: clone(state.pendingDeepLink)
         };
     }
 
@@ -297,8 +382,8 @@
         const bridge = policy + `<script>(function(){\n` +
             `var seq=0,pending={},initialResolve;var initial=new Promise(function(r){initialResolve=r;});\n` +
             `function send(action,payload){return new Promise(function(resolve,reject){var id='g'+(++seq);pending[id]={resolve:resolve,reject:reject};parent.postMessage({source:'guides-shell',type:'request',id:id,action:action,payload:payload||{}},'*');});}\n` +
-            `window.GuidesAPI={version:1,getInitialData:function(){return initial;},setGuideCompleted:function(slug,completed){return send('setGuideCompleted',{slug:slug,completed:completed});},setQuizCompleted:function(id,completed){return send('setQuizCompleted',{id:id,completed:completed});},setBirthdate:function(value){return send('setBirthdate',{value:value});},savePreference:function(key,value){return send('savePreference',{key:key,value:value});},goBack:function(){return send('goBack');},openUrl:function(url){return send('openUrl',{url:url});},openActionItem:function(action){return send('openActionItem',{action:action});},openPaywall:function(){return send('openPaywall');},subscribe:function(fn){window.addEventListener('guides:data',function(e){fn(e.detail);});},onBack:function(fn){window.addEventListener('guides:back',fn);}};\n` +
-            `window.addEventListener('message',function(e){var m=e.data||{};if(m.source!=='guides-runtime')return;if(m.type==='init'){window.__GUIDES_INITIAL_DATA__=m.data;initialResolve(m.data);window.dispatchEvent(new CustomEvent('guides:data',{detail:m.data}));}if(m.type==='back'){window.dispatchEvent(new CustomEvent('guides:back'));}if(m.type==='response'&&pending[m.id]){var p=pending[m.id];delete pending[m.id];m.error?p.reject(new Error(m.error)):p.resolve(m.data);}});\n` +
+            `window.GuidesAPI={version:1,getInitialData:function(){return initial;},setGuideCompleted:function(slug,completed){return send('setGuideCompleted',{slug:slug,completed:completed});},setQuizCompleted:function(id,completed){return send('setQuizCompleted',{id:id,completed:completed});},setBirthdate:function(value){return send('setBirthdate',{value:value});},savePreference:function(key,value){return send('savePreference',{key:key,value:value});},setReaderMode:function(enabled){return send('setReaderMode',{enabled:enabled});},goBack:function(){return send('goBack');},openUrl:function(url){return send('openUrl',{url:url});},openActionItem:function(action){return send('openActionItem',{action:action});},openPaywall:function(){return send('openPaywall');},subscribe:function(fn){window.addEventListener('guides:data',function(e){fn(e.detail);});},onBack:function(fn){window.addEventListener('guides:back',fn);},onDeepLink:function(fn){window.addEventListener('guides:deeplink',function(e){fn(e.detail);});}};\n` +
+            `window.addEventListener('message',function(e){var m=e.data||{};if(m.source!=='guides-runtime')return;if(m.type==='init'){window.__GUIDES_INITIAL_DATA__=m.data;initialResolve(m.data);window.dispatchEvent(new CustomEvent('guides:data',{detail:m.data}));}if(m.type==='back'){window.dispatchEvent(new CustomEvent('guides:back'));}if(m.type==='deeplink'){window.dispatchEvent(new CustomEvent('guides:deeplink',{detail:m.data}));}if(m.type==='response'&&pending[m.id]){var p=pending[m.id];delete pending[m.id];m.error?p.reject(new Error(m.error)):p.resolve(m.data);}});\n` +
             `window.addEventListener('error',function(e){parent.postMessage({source:'guides-shell',type:'error',message:e.message||'Shell error'},'*');});\n` +
             `parent.postMessage({source:'guides-shell',type:'ready',contractVersion:1},'*');\n` +
             `}());<\/script>`;
@@ -329,23 +414,57 @@
 
     function renderContractShell(app, html, state) {
         app.innerHTML = "";
+        app.classList.add("contract-shell");
         const frame = document.createElement("iframe");
         frame.title = "Interactive guides";
         frame.setAttribute("sandbox", "allow-scripts allow-forms allow-popups allow-modals");
-        frame.style.cssText = "display:block;width:100%;min-height:100vh;border:0;background:#fff";
+        // Flex with a zero minimum follows host resizing when the native bars
+        // hide/show. Safe-area padding belongs to the host, outside the iframe.
+        frame.style.cssText = "display:block;flex:1 1 0;width:100%;height:100%;min-height:0;min-width:0;border:0;background:#fff";
         state.frame = frame;
         app.appendChild(frame);
 
         let ready = false;
         let fallbackTimer;
+        let readerMode = false;
+        let readerModeQueue = Promise.resolve();
+        function setReaderMode(enabled) {
+            const operation = readerModeQueue.then(async () => {
+                if (readerMode === enabled) return;
+                const appearance = buildfire.appearance;
+                const method = enabled ? "hide" : "show";
+                // BuildFire names the app footer "navbar".
+                // Track partial failures so leaving the reader still shows both bars.
+                readerMode = null;
+                const results = await Promise.allSettled(["titlebar", "navbar"].map((name) =>
+                    new Promise((resolve, reject) => {
+                        const bar = appearance && appearance[name];
+                        if (!bar || typeof bar[method] !== "function") {
+                            return reject(new Error("BuildFire appearance." + name + "." + method + " is unavailable."));
+                        }
+                        bar[method](null, (error) => {
+                            if (error) return reject(new Error(String(error)));
+                            resolve();
+                        });
+                    })
+                ));
+                const failure = results.find((result) => result.status === "rejected");
+                if (failure) throw failure.reason;
+                readerMode = enabled;
+            });
+            readerModeQueue = operation.catch(() => {});
+            return operation;
+        }
         const onMessage = async (event) => {
             if (event.source !== frame.contentWindow) return;
             const message = event.data || {};
             if (message.source !== "guides-shell") return;
             if (message.type === "ready") {
                 ready = true;
+                state.shellReady = true;
                 clearTimeout(fallbackTimer);
                 sendFrame(frame, { type: "init", data: bootstrapData(state) });
+                state.pendingDeepLink = null;
                 return;
             }
             if (message.type === "error") {
@@ -383,17 +502,25 @@
                     state.preferences[key] = clone(message.payload.value);
                     await saveProgress(state);
                     result = clone(state.preferences);
+                } else if (message.action === "setReaderMode") {
+                    if (!message.payload || typeof message.payload.enabled !== "boolean") throw new Error("Reader mode must be a boolean.");
+                    await setReaderMode(message.payload.enabled);
                 } else if (message.action === "goBack") {
+                    await setReaderMode(false);
                     navigateAppHome();
                 } else if (message.action === "openUrl") {
                     openUrl(message.payload && message.payload.url);
                 } else if (message.action === "openActionItem") {
                     const action = message.payload && message.payload.action;
                     if (!action || typeof action !== "object" || Array.isArray(action)) throw new Error("Invalid action item.");
-                    if (!buildfire.actionItems || typeof buildfire.actionItems.execute !== "function") {
+                    const internalGuideId = guideIdFromActionItem(action);
+                    if (internalGuideId) {
+                        receiveDeepLink({ type: "guide", guideId: internalGuideId });
+                    } else if (!buildfire.actionItems || typeof buildfire.actionItems.execute !== "function") {
                         throw new Error("Action items are unavailable.");
+                    } else {
+                        buildfire.actionItems.execute(action, () => { });
                     }
-                    buildfire.actionItems.execute(action, () => { });
                 } else if (message.action === "openPaywall") {
                     if (!buildfire.navigation || typeof buildfire.navigation.navigateTo !== "function") {
                         throw new Error("Subscription screen is unavailable.");
@@ -412,12 +539,6 @@
             }
         };
         window.addEventListener("message", onMessage);
-        frame.addEventListener("load", () => {
-            try {
-                const height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
-                frame.style.minHeight = height + "px";
-            } catch (error) { /* sandboxed frame */ }
-        });
         frame.srcdoc = injectShellBridge(html);
         if (buildfire.navigation) {
             buildfire.navigation.onBackButtonClick = () => sendFrame(frame, { type: "back" });
@@ -425,6 +546,7 @@
         fallbackTimer = setTimeout(() => {
             if (!ready) {
                 window.removeEventListener("message", onMessage);
+                app.classList.remove("contract-shell");
                 console.error("Uploaded guide shell did not complete the contract handshake; using the built-in renderer.");
                 renderBuiltIn(app, state, "The uploaded design could not start, so a safe fallback is shown.");
             }
@@ -480,6 +602,7 @@
             });
             prepareGuideContent(document.getElementById("runtime-content"));
         }
+        state.openGuide = reader;
 
         if (buildfire.navigation) {
             buildfire.navigation.onBackButtonClick = () => {
@@ -490,7 +613,14 @@
 
         if (!published.length) {
             app.innerHTML = '<section class="state"><h1>No guides published</h1><p>Add and publish guides from the Content section.</p></section>';
-        } else home();
+        } else {
+            home();
+            if (state.pendingDeepLink && state.pendingDeepLink.type === "guide") {
+                const guideId = state.pendingDeepLink.guideId;
+                state.pendingDeepLink = null;
+                reader(guideId);
+            }
+        }
     }
 
     async function findActiveShell(releaseState) {
@@ -502,6 +632,7 @@
     async function run() {
         const app = document.getElementById("app");
         const state = createState();
+        runtimeState = state;
         try {
             const [lessons, quizzes, journeyData, releaseState, legacyHtml] = await Promise.all([
                 searchAll(TAGS.lessons),
@@ -541,6 +672,7 @@
         start() {
             if (started) return true;
             started = true;
+            listenForDeepLinks();
             run();
             if (buildfire.datastore && typeof buildfire.datastore.onUpdate === "function") {
                 buildfire.datastore.onUpdate(() => window.location.reload());

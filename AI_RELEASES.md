@@ -9,9 +9,12 @@ letting an AI work with all of them in one HTML file.
 2. Select **Download AI working file**.
 3. Give the downloaded HTML to the AI together with the requested changes.
 4. Upload the returned HTML. Uploading only stages it.
-5. Review the content diff, warnings, and interactive preview.
-6. Publish the release or discard it.
-7. Use **Release history** to restore one of the five most recent releases.
+5. Choose whether the upload may update guides/organization, quizzes, both, or neither.
+   Both content options are off by default so a design release cannot overwrite
+   content maintained manually in the CMS.
+6. Review the content diff, warnings, and interactive preview.
+7. Publish the release or discard it.
+8. Use **Release history** to restore or delete inactive releases.
 
 Restoring a release changes the design and canonical content snapshot. It never
 changes the per-user `reading-progress` record.
@@ -58,6 +61,7 @@ await GuidesAPI.goBack();
 await GuidesAPI.openUrl("https://example.com");
 await GuidesAPI.openActionItem({ action: "linkToApp", instanceId: "..." });
 await GuidesAPI.openPaywall();
+await GuidesAPI.setReaderMode(true); // Hide titlebar and navbar while reading; false shows both.
 GuidesAPI.onBack(() => showPreviousInternalScreen());
 ```
 
@@ -79,6 +83,12 @@ The AI may update design and content in the same file. On upload, the control
 panel validates and extracts the content. In production, canonical datastore
 content is injected by `GuidesAPI`; embedded JSON is only authoring and preview
 context.
+
+At publication time, the control panel reloads the latest live datastore
+content. Guides/organization and quizzes are imported only when their respective
+staged-release option is selected. Every unselected content type is copied from
+that latest live state into the release snapshot, preventing changes made by the
+CMS team after staging from being overwritten.
 
 Existing guide IDs (`lesson.slug` in the compatibility schema) and journey IDs are permanent. A title change must not
 change its stable ID. Guides omitted from `lessons` are preserved. Intentional

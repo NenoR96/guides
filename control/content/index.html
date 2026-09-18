@@ -497,6 +497,23 @@
             color: #356fd0;
         }
 
+        .status[data-type="warning"] {
+            color: #765318;
+        }
+
+        .publish-status {
+            flex: 1 1 220px;
+            align-self: center;
+            min-height: 0;
+            margin: 0 0 0 4px;
+            font-size: 12px;
+        }
+
+        .publish-actions {
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
         .sections {
             display: grid;
             gap: 10px;
@@ -810,6 +827,31 @@
             font-size: 12px;
         }
 
+        .release-content-options {
+            display: grid;
+            gap: 8px;
+            margin: 12px 0;
+            padding: 12px;
+            border: 1px solid #dbe2e9;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .release-content-options>strong { font-size: 12px; }
+
+        .release-content-options label {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .release-content-options input {
+            width: auto;
+            margin-top: 2px;
+        }
+
         .release-preview {
             display: block;
             width: 100%;
@@ -1003,8 +1045,7 @@
                                     <div class="field">
                                         <label for="lesson-slug">Stable ID</label>
                                         <input id="lesson-slug" placeholder="blw-o-que-e">
-                                        <small>Used by progress and references. Avoid changing it after
-                                            publishing.</small>
+                                        <small>Used by progress and references. Locked after the guide is created.</small>
                                     </div>
                                     <div class="field">
                                         <label for="lesson-icon">Icon ID</label>
@@ -1258,11 +1299,13 @@
                     <span id="html-upload-details"></span>
                 </div>
                 <div class="inline-actions html-export-actions">
-                    <button class="btn small" id="download-html" type="button" disabled>Download HTML shell</button>
+                    <button class="btn small" id="download-html" type="button" disabled style="display:none">Download HTML shell</button>
                     <button class="btn small primary" id="download-ai-working-file" type="button">Download AI working
                         file</button>
-                    <button class="btn small" id="export-content" type="button">Export complete content</button>
+                    <button class="btn small" id="export-content" type="button" style="display:none">Export complete content</button>
+                    <button class="btn small" id="register-all-guide-deeplinks" type="button" style="display:none">Register all guide deep links</button>
                 </div>
+                <div class="status" id="deeplink-status" role="status" aria-live="polite"></div>
                 <div class="release-panel" id="release-draft-panel">
                     <div class="card-header">
                         <div>
@@ -1272,9 +1315,16 @@
                     </div>
                     <p class="release-summary" id="release-diff"></p>
                     <ul class="release-warnings" id="release-warnings"></ul>
-                    <div class="inline-actions html-export-actions">
+                    <div class="release-content-options" id="release-content-options">
+                        <strong>Choose what this upload may update</strong>
+                        <label><input id="release-update-guides" type="checkbox"> Update guides and their organization from the uploaded HTML</label>
+                        <label><input id="release-update-quizzes" type="checkbox"> Update quizzes from the uploaded HTML</label>
+                        <small>Both are off by default. Unchecked datastore content is preserved from the latest live version when Publish is clicked. Selected types may replace matching records, so review the refreshed diff.</small>
+                    </div>
+                    <div class="inline-actions html-export-actions publish-actions">
                         <button class="btn small" id="discard-release" type="button">Discard</button>
                         <button class="btn small primary" id="publish-release" type="button">Publish release</button>
+                        <span class="status publish-status" id="publish-status" role="status" aria-live="polite"></span>
                     </div>
                     <iframe class="release-preview" id="release-preview" title="Staged guide release preview"
                         sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>
@@ -1293,7 +1343,6 @@
                 <div class="release-list" id="release-list">
                     <div class="list-empty">No versioned releases yet.</div>
                 </div>
-                <div class="status" id="release-status" role="status" aria-live="polite"></div>
             </section>
             <section class="card lesson-json-tools">
                 <div class="card-header">
@@ -1322,7 +1371,9 @@
             // "lesson" identifiers below are retained only as persisted-schema compatibility names.
             // Product and team terminology is "guide".
             const LESSON_TAG = "guideLessons";
+            const GUIDE_DEEPLINK_PREFIX = "guide-";
             const QUIZ_TAG = "guideQuizzes";
+            const QUIZ_DEEPLINK_PREFIX = "quiz-";
             const JOURNEY_TAG = "guideJourneys";
             const HTML_TAG = "interactiveGuideHtml";
             const PAGE_SIZE = 50;
@@ -1673,6 +1724,7 @@
                             state.journeys.splice(journeyIndex, 1, journey);
                             await saveJourneyCollection();
                         }
+                        await syncGuideDeeplinks(lessons);
                         await loadLessons();
                         if (journey && state.selectedJourneyId === journey.id) selectJourney(journey.id);
                         renderLessonFilterOptions();
@@ -1808,6 +1860,135 @@
                     });
                 });
             }
+
+            function guideDeeplinkId(slug) {
+                return GUIDE_DEEPLINK_PREFIX + String(slug || "").trim();
+            }
+
+            function quizDeeplinkId(id) {
+                return QUIZ_DEEPLINK_PREFIX + String(id || "").trim();
+            }
+
+            function unregisterGuideDeeplink(slug) {
+                const id = guideDeeplinkId(slug);
+                if (!String(slug || "").trim() || !buildfire.deeplink || typeof buildfire.deeplink.unregisterDeeplink !== "function") return Promise.resolve();
+                return new Promise((resolve, reject) => {
+                    const remove = () => buildfire.deeplink.unregisterDeeplink(id, (error) => error ? reject(error) : resolve());
+                    if (typeof buildfire.deeplink.getDeeplink !== "function") return remove();
+                    buildfire.deeplink.getDeeplink(id, (lookupError, result) => {
+                        if (lookupError) return reject(lookupError);
+                        if (!result || !result.data) return resolve();
+                        remove();
+                    });
+                });
+            }
+
+            function registerGuideDeeplink(lesson) {
+                if (!lesson || !lesson.slug) return Promise.resolve();
+                if (lesson.published === false) return unregisterGuideDeeplink(lesson.slug);
+                if (!buildfire.deeplink || typeof buildfire.deeplink.registerDeeplink !== "function") return Promise.resolve();
+                const definition = {
+                    id: guideDeeplinkId(lesson.slug),
+                    name: "Guide: " + (lesson.title || lesson.slug),
+                    deeplinkData: { type: "guide", guideId: lesson.slug }
+                };
+                return new Promise((resolve, reject) => {
+                    buildfire.deeplink.registerDeeplink(definition, (error) => {
+                        if (error) return reject(error);
+                        if (typeof buildfire.deeplink.getDeeplink !== "function") return resolve(definition);
+                        buildfire.deeplink.getDeeplink(definition.id, (lookupError, result) => {
+                            if (lookupError) return reject(lookupError);
+                            const saved = result && result.data ? result.data : result;
+                            if (!saved || !saved.deeplinkData || saved.deeplinkData.guideId !== lesson.slug) {
+                                return reject(new Error("The guide deep link could not be verified."));
+                            }
+                            resolve(saved);
+                        });
+                    });
+                });
+            }
+
+            async function syncGuideDeeplinks(lessons) {
+                for (const lesson of lessons || []) await registerGuideDeeplink(lesson);
+            }
+
+            function unregisterQuizDeeplink(id) {
+                const deeplinkId = quizDeeplinkId(id);
+                if (!String(id || "").trim() || !buildfire.deeplink || typeof buildfire.deeplink.unregisterDeeplink !== "function") return Promise.resolve();
+                return new Promise((resolve, reject) => {
+                    const remove = () => buildfire.deeplink.unregisterDeeplink(deeplinkId, (error) => error ? reject(error) : resolve());
+                    if (typeof buildfire.deeplink.getDeeplink !== "function") return remove();
+                    buildfire.deeplink.getDeeplink(deeplinkId, (lookupError, result) => {
+                        if (lookupError) return reject(lookupError);
+                        if (!result || !result.data) return resolve();
+                        remove();
+                    });
+                });
+            }
+
+            function registerQuizDeeplink(quiz) {
+                if (!quiz || !quiz.id) return Promise.resolve();
+                if (quiz.published === false) return unregisterQuizDeeplink(quiz.id);
+                if (!buildfire.deeplink || typeof buildfire.deeplink.registerDeeplink !== "function") return Promise.resolve();
+                const definition = {
+                    id: quizDeeplinkId(quiz.id),
+                    name: "Quiz: " + (quiz.title || quiz.id),
+                    deeplinkData: { type: "quiz", quizId: quiz.id }
+                };
+                return new Promise((resolve, reject) => {
+                    buildfire.deeplink.registerDeeplink(definition, (error) => {
+                        if (error) return reject(error);
+                        if (typeof buildfire.deeplink.getDeeplink !== "function") return resolve(definition);
+                        buildfire.deeplink.getDeeplink(definition.id, (lookupError, result) => {
+                            if (lookupError) return reject(lookupError);
+                            const saved = result && result.data ? result.data : result;
+                            if (!saved || !saved.deeplinkData || saved.deeplinkData.quizId !== quiz.id) {
+                                return reject(new Error("The quiz deep link could not be verified."));
+                            }
+                            resolve(saved);
+                        });
+                    });
+                });
+            }
+
+            async function syncQuizDeeplinks(quizzes) {
+                for (const quiz of quizzes || []) await registerQuizDeeplink(quiz);
+            }
+
+            async function syncAllDeeplinks(lessons, quizzes) {
+                if (!buildfire.deeplink || typeof buildfire.deeplink.registerDeeplink !== "function") {
+                    throw new Error("BuildFire deep-link registration is unavailable.");
+                }
+                await syncGuideDeeplinks(lessons);
+                await syncQuizDeeplinks(quizzes);
+            }
+
+            async function registerAllGuideDeeplinks() {
+                try {
+                    setBusy(true);
+                    setStatus($("deeplink-status"), "Registering guide and quiz deep links…", "loading");
+                    await Promise.all([loadLessons(), loadQuizzes()]);
+                    await syncAllDeeplinks(state.lessons, state.quizzes);
+                    const guideCount = state.lessons.filter((lesson) => lesson.published !== false).length;
+                    const quizCount = state.quizzes.filter((quiz) => quiz.published !== false).length;
+                    setStatus($("deeplink-status"), "Registered " + guideCount + " guide and " + quizCount + " quiz deep link(s).", "success");
+                } catch (error) {
+                    console.error("Unable to register all guide and quiz deep links", error);
+                    setStatus($("deeplink-status"), "Unable to register deep links: " + errorMessage(error), "error");
+                } finally {
+                    setBusy(false);
+                }
+            }
+
+            window.GuidesDeepLinks = {
+                registerGuide: registerGuideDeeplink,
+                unregisterGuide: unregisterGuideDeeplink,
+                syncGuides: syncGuideDeeplinks,
+                registerQuiz: registerQuizDeeplink,
+                unregisterQuiz: unregisterQuizDeeplink,
+                syncQuizzes: syncQuizDeeplinks,
+                syncAll: syncAllDeeplinks
+            };
 
             function insertQuiz(data) {
                 return new Promise((resolve, reject) => {
@@ -2024,6 +2205,8 @@
                 $("lesson-editor").hidden = showEditor === false;
                 $("lesson-selector").hidden = hideSelector === true;
                 state.selectedLessonId = null;
+                $("lesson-slug").disabled = false;
+                $("lesson-slug").removeAttribute("title");
                 $("lesson-form").reset();
                 $("lesson-published").checked = true;
                 $("lesson-form-title").textContent = "New guide";
@@ -2049,6 +2232,8 @@
                 $("reset-lesson").textContent = "Cancel";
                 $("save-lesson").textContent = "Save changes";
                 $("lesson-slug").value = lesson.slug || "";
+                $("lesson-slug").disabled = true;
+                $("lesson-slug").title = "Stable IDs cannot be changed after creation.";
                 $("lesson-title").value = lesson.title || "";
                 $("lesson-tag").value = lesson.tag || "";
                 $("lesson-icon").value = lesson.icon || "";
@@ -2080,12 +2265,14 @@
             }
 
             function readLessonForm() {
-                const slug = normalizeSlug($("lesson-slug").value || $("lesson-title").value);
+                const existing = state.lessons.find((item) => item._recordId === state.selectedLessonId);
+                const slug = existing
+                    ? existing.slug
+                    : normalizeSlug($("lesson-slug").value || $("lesson-title").value);
                 if (!slug) throw new Error("A stable guide ID is required.");
                 $("lesson-slug").value = slug;
                 const duplicate = state.lessons.find((item) => item.slug === slug && item._recordId !== state.selectedLessonId);
                 if (duplicate) throw new Error("Another guide already uses the ID “" + slug + "”.");
-                const existing = state.lessons.find((item) => item._recordId === state.selectedLessonId);
                 const selectedTheme = activeJourney() && Array.isArray(activeJourney().listThemes)
                     ? activeJourney().listThemes.find((item) => item.key === $("lesson-theme").value)
                     : null;
@@ -2183,6 +2370,10 @@
                         state.journeys.splice(index, 1, syncedJourney);
                         await saveJourneyCollection();
                     }
+                    await registerGuideDeeplink(data);
+                    if (previous && previous.slug && previous.slug !== data.slug) {
+                        await unregisterGuideDeeplink(previous.slug);
+                    }
                     await loadLessons();
                     if (syncedJourney && state.selectedJourneyId === syncedJourney.id) selectJourney(syncedJourney.id);
                     const savedId = (result && (result.id || result._id)) ||
@@ -2218,6 +2409,7 @@
                         return next;
                     });
                     await saveJourneyCollection();
+                    await unregisterGuideDeeplink(lesson.slug);
                     await loadLessons();
                     if (state.selectedJourneyId && state.journeys.some((item) => item.id === state.selectedJourneyId)) {
                         selectJourney(state.selectedJourneyId);
@@ -2381,6 +2573,10 @@
                     '<div class="theme-add-row"><select class="theme-add-select"></select><button class="btn small theme-add" type="button">Add guide</button></div>'
                 ].join("");
                 card.querySelector(".theme-key").value = theme.key || "";
+                const savedJourney = state.journeys.find((item) => item.id === state.selectedJourneyId);
+                const isExistingTheme = !!(savedJourney && (savedJourney.listThemes || []).some((item) => item.key === theme.key));
+                card.querySelector(".theme-key").disabled = isExistingTheme;
+                if (isExistingTheme) card.querySelector(".theme-key").title = "Stable category IDs cannot be changed after creation.";
                 card.querySelector(".theme-label").value = theme.label || "";
                 card.querySelector(".theme-subtitle").value = theme.subtitle || "";
                 card.querySelector(".theme-icon").value = theme.icon || "";
@@ -2548,6 +2744,11 @@
                     '<textarea class="section-lessons" aria-label="Guide IDs" placeholder="One guide Stable ID per line"></textarea>'
                 ].join("");
                 row.querySelector(".section-id").value = section && section.id || "";
+                const savedJourney = state.journeys.find((item) => item.id === state.selectedJourneyId);
+                const isExistingSection = !!(section && section.id && savedJourney &&
+                    (savedJourney.sections || []).some((item) => item.id === section.id));
+                row.querySelector(".section-id").disabled = isExistingSection;
+                if (isExistingSection) row.querySelector(".section-id").title = "Stable section IDs cannot be changed after creation.";
                 row.querySelector(".section-title").value = section && section.title || "";
                 row.querySelector(".section-subtitle").value = section && section.subtitle || "";
                 row.querySelector(".section-icon").value = section && section.icon || "";
@@ -2584,6 +2785,8 @@
 
             function clearJourneyForm() {
                 state.selectedJourneyId = null;
+                $("journey-id").disabled = false;
+                $("journey-id").removeAttribute("title");
                 $("journey-form").reset();
                 $("journey-published").checked = true;
                 $("delete-journey").hidden = true;
@@ -2613,6 +2816,8 @@
                 state.selectedJourneyId = id;
                 renderLessonFilterOptions();
                 $("journey-id").value = journey.id || "";
+                $("journey-id").disabled = true;
+                $("journey-id").title = "Stable journey IDs cannot be changed after creation.";
                 $("journey-title").value = journey.title || "";
                 $("journey-description").value = journey.description || "";
                 $("journey-default").checked = journey.id === state.defaultJourneyId;
@@ -2670,8 +2875,9 @@
             }
 
             function readJourneyForm() {
-                const id = normalizeSlug($("journey-id").value);
+                const id = state.selectedJourneyId || normalizeSlug($("journey-id").value);
                 if (!id) throw new Error("A journey ID is required.");
+                $("journey-id").value = id;
                 const duplicate = state.journeys.find((item) => item.id === id && item.id !== state.selectedJourneyId);
                 if (duplicate) throw new Error("Another journey already uses the ID “" + id + "”.");
                 const sections = readSectionRows();
@@ -3301,12 +3507,17 @@
             async function handleQuizSave(event) {
                 event.preventDefault();
                 try {
+                    const previous = state.quizzes.find((item) => item._recordId === state.selectedQuizId);
                     const quiz = readQuizForm();
                     setBusy(true);
                     setStatus($("quiz-status"), "Saving quiz…", "loading");
                     let result;
                     if (state.selectedQuizId) result = await updateQuiz(state.selectedQuizId, quiz);
                     else result = await insertQuiz(quiz);
+                    await registerQuizDeeplink(quiz);
+                    if (previous && previous.id && previous.id !== quiz.id) {
+                        await unregisterQuizDeeplink(previous.id);
+                    }
                     await loadQuizzes();
                     const savedId = (result && (result.id || result._id)) ||
                         (state.quizzes.find((item) => item.id === quiz.id) || {})._recordId;
@@ -3347,6 +3558,7 @@
                 try {
                     setBusy(true);
                     await deleteQuiz(quiz._recordId);
+                    await unregisterQuizDeeplink(quiz.id);
                     await loadQuizzes();
                     clearQuizForm(false);
                     setStatus($("quiz-status"), "Quiz deleted.", "success");
@@ -3380,6 +3592,7 @@
                     if (existing) { await updateQuiz(existing._recordId, quiz); updated += 1; }
                     else { await insertQuiz(quiz); created += 1; }
                 }
+                await syncQuizDeeplinks(quizzes);
                 await loadQuizzes();
                 return { created, updated, total: quizzes.length };
             }
@@ -3584,6 +3797,7 @@
                 else downloadUploadedHtml();
             });
             $("export-content").addEventListener("click", exportCompleteContent);
+            $("register-all-guide-deeplinks").addEventListener("click", registerAllGuideDeeplinks);
             $("download-lesson-template").addEventListener("click", downloadLessonTemplate);
             $("import-lessons").addEventListener("click", () => lessonImportFileInput.click());
             $("export-lessons").addEventListener("click", exportLessons);

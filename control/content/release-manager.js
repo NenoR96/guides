@@ -23,6 +23,13 @@
         target.dataset.type = type || "";
     }
 
+    function setPublishStatus(message, type) {
+        const target = $("publish-status");
+        if (!target) return setStatus(message, type);
+        target.textContent = message || "";
+        target.dataset.type = type || "";
+    }
+
     function clone(value) {
         return value == null ? value : JSON.parse(JSON.stringify(value));
     }
@@ -316,6 +323,38 @@
         };
     }
 
+    function selectedContentPayload(draft) {
+        const content = draft && draft.validation && draft.validation.content;
+        if (!content) return null;
+        const options = draft.options || {};
+        return {
+            schemaVersion: content.schemaVersion,
+            lessons: options.updateGuides ? content.lessons : [],
+            quizzes: options.updateQuizzes ? content.quizzes : [],
+            journeyData: options.updateGuides ? content.journeyData : null,
+            archivedLessonIds: options.updateGuides ? content.archivedLessonIds : [],
+            archivedQuizIds: options.updateQuizzes ? content.archivedQuizIds : []
+        };
+    }
+
+    function refreshDraftSelection(draft, before) {
+        const snapshot = before || draft.before;
+        const payload = selectedContentPayload(draft);
+        draft.before = snapshot;
+        draft.target = targetSnapshot(payload, snapshot);
+        draft.diff = contentDiff(payload, snapshot);
+        draft.selectionError = null;
+        try {
+            validateTargetSnapshot(draft.target);
+        } catch (error) {
+            // Keep the user's checkbox choice visible. Some releases require
+            // guides and quizzes together, so the first click can be an invalid
+            // intermediate state until the second option is selected.
+            draft.selectionError = errorMessage(error);
+        }
+        return !draft.selectionError;
+    }
+
     function validateTargetSnapshot(snapshot) {
         const publishedIds = new Set(snapshot.lessons.filter((lesson) => lesson.published !== false).map((lesson) => lesson.slug));
         const quizIds = new Set();
@@ -349,7 +388,7 @@
 
     function previewBootstrap(data) {
         const json = JSON.stringify(data).replace(/</g, "\\u003c");
-        return `<script>(function(){var data=${json};var listeners=[];window.GuidesAPI={version:1,getInitialData:function(){return Promise.resolve(data);},setGuideCompleted:function(slug,completed){var ids=new Set(data.progress.readGuideIds||[]);completed===false?ids.delete(slug):ids.add(slug);data.progress.readGuideIds=Array.from(ids);listeners.forEach(function(fn){fn(data);});return Promise.resolve(data.progress);},setQuizCompleted:function(id,completed){var ids=new Set(data.progress.completedQuizIds||[]);completed===false?ids.delete(id):ids.add(id);data.progress.completedQuizIds=Array.from(ids);return Promise.resolve(data.progress);},setBirthdate:function(value){data.profile.babyBirthdate=value||null;return Promise.resolve(data.profile);},savePreference:function(key,value){data.preferences[key]=value;return Promise.resolve(data.preferences);},goBack:function(){return Promise.resolve();},openUrl:function(url){console.log('Preview link',url);return Promise.resolve();},openActionItem:function(action){console.log('Preview action item',action);return Promise.resolve();},openPaywall:function(){return Promise.resolve();},subscribe:function(fn){listeners.push(fn);},onBack:function(){}};window.__GUIDES_INITIAL_DATA__=data;}());<\/script>`;
+        return `<script>(function(){var data=${json};var listeners=[];window.GuidesAPI={version:1,getInitialData:function(){return Promise.resolve(data);},setGuideCompleted:function(slug,completed){var ids=new Set(data.progress.readGuideIds||[]);completed===false?ids.delete(slug):ids.add(slug);data.progress.readGuideIds=Array.from(ids);listeners.forEach(function(fn){fn(data);});return Promise.resolve(data.progress);},setQuizCompleted:function(id,completed){var ids=new Set(data.progress.completedQuizIds||[]);completed===false?ids.delete(id):ids.add(id);data.progress.completedQuizIds=Array.from(ids);return Promise.resolve(data.progress);},setBirthdate:function(value){data.profile.babyBirthdate=value||null;return Promise.resolve(data.profile);},savePreference:function(key,value){data.preferences[key]=value;return Promise.resolve(data.preferences);},setReaderMode:function(){return Promise.resolve();},goBack:function(){return Promise.resolve();},openUrl:function(url){console.log('Preview link',url);return Promise.resolve();},openActionItem:function(action){console.log('Preview action item',action);return Promise.resolve();},openPaywall:function(){return Promise.resolve();},subscribe:function(fn){listeners.push(fn);},onBack:function(){},onDeepLink:function(){}};window.__GUIDES_INITIAL_DATA__=data;}());<\/script>`;
     }
 
     function injectAfterHead(html, addition) {
@@ -361,25 +400,39 @@
         if (!state.draft) {
             panel.classList.remove("visible");
             $("release-preview").removeAttribute("srcdoc");
+            setPublishStatus("", "");
             return;
         }
         const diff = state.draft.diff;
+        const hasContent = !!state.draft.validation.content;
+        const updateGuides = hasContent && state.draft.options.updateGuides;
+        const updateQuizzes = hasContent && state.draft.options.updateQuizzes;
+        $("release-update-guides").disabled = !hasContent;
+        $("release-update-quizzes").disabled = !hasContent;
+        $("release-update-guides").checked = !!updateGuides;
+        $("release-update-quizzes").checked = !!updateQuizzes;
         $("release-diff").innerHTML = '<strong>' + state.draft.fileName + '</strong><br>' +
             'Contract v' + state.draft.validation.contract + ' · ' +
-            diff.creates.length + ' new · ' + diff.updates.length + ' updated · ' +
-            diff.archives.length + ' archived · ' + diff.unchanged.length + ' unchanged' +
-            (state.draft.validation.content && state.draft.validation.content.journeyData ? ' · organization included' : ' · organization unchanged');
-        $("release-diff").innerHTML += '<br>' + diff.quizCreates.length + ' new quiz(zes) / ' +
-            diff.quizUpdates.length + ' updated / ' + diff.quizArchives.length + ' archived / ' +
-            diff.quizUnchanged.length + ' unchanged';
+            (updateGuides
+                ? diff.creates.length + ' new guides · ' + diff.updates.length + ' updated · ' +
+                    diff.archives.length + ' archived · ' + diff.unchanged.length + ' unchanged' +
+                    (state.draft.validation.content.journeyData ? ' · organization included' : ' · organization unchanged')
+                : 'guides and organization preserved from live datastore');
+        $("release-diff").innerHTML += '<br>' + (updateQuizzes
+            ? diff.quizCreates.length + ' new quiz(zes) / ' + diff.quizUpdates.length + ' updated / ' +
+                diff.quizArchives.length + ' archived / ' + diff.quizUnchanged.length + ' unchanged'
+            : 'quizzes preserved from live datastore');
         const warnings = $("release-warnings");
         warnings.innerHTML = "";
-        state.draft.validation.warnings.forEach((warning) => {
+        const draftWarnings = state.draft.validation.warnings.slice();
+        if (state.draft.selectionError) draftWarnings.push("Content selection: " + state.draft.selectionError);
+        draftWarnings.forEach((warning) => {
             const item = document.createElement("li");
             item.textContent = warning;
             warnings.appendChild(item);
         });
-        warnings.hidden = !state.draft.validation.warnings.length;
+        warnings.hidden = !draftWarnings.length;
+        $("publish-release").disabled = !!state.draft.selectionError;
         const target = state.draft.target;
         const journeys = target.journeyData && target.journeyData.journeys || [];
         const activeJourney = journeys.find((journey) => journey.id === target.journeyData.defaultJourneyId) || journeys[0] || null;
@@ -389,7 +442,9 @@
             quizzes: (target.quizzes || []).filter((quiz) => quiz.published !== false),
             journeyData: target.journeyData,
             activeJourney,
-            progress: { readGuideIds: target.lessons.slice(0, 3).map((lesson) => lesson.slug), completedQuizIds: [] },
+            // An empty preview progress set prevents the shell's "continue"
+            // anchor from scrolling the surrounding Content panel on reload.
+            progress: { readGuideIds: [], completedQuizIds: [] },
             profile: { babyBirthdate: "2025-12-10" },
             preferences: {},
             currentUser: { id: "preview-user", displayName: "Preview User", firstName: "Preview" },
@@ -410,19 +465,20 @@
             if (!html.trim()) throw new Error("The selected HTML file is empty.");
             const validation = validateHtml(html);
             const before = await currentSnapshot();
-            const target = targetSnapshot(validation.content, before);
-            validateTargetSnapshot(target);
             state.draft = {
                 html,
                 fileName: file.name,
                 fileSize: file.size,
                 validation,
                 before,
-                diff: contentDiff(validation.content, before),
-                target
+                options: { updateGuides: false, updateQuizzes: false },
+                diff: null,
+                target: null
             };
+            refreshDraftSelection(state.draft);
+            setPublishStatus("", "");
             renderDraft();
-            setStatus("Release staged. Review the diff and interactive preview before publishing.", "success");
+            setStatus("Release staged as design-only. Choose explicitly if this upload should update guides or quizzes.", "success");
         } catch (error) {
             state.draft = null;
             renderDraft();
@@ -433,28 +489,39 @@
         }
     }
 
-    async function applySnapshot(snapshot) {
-        const records = await searchRecords(TAGS.lessons);
-        const current = new Map(records
-            .filter((record) => recordData(record) && recordData(record).slug)
-            .map((record) => [recordData(record).slug, record]));
-        const target = new Map(snapshot.lessons.map((lesson) => [lesson.slug, lesson]));
-        for (const lesson of snapshot.lessons) {
-            const existing = current.get(lesson.slug);
-            if (existing && recordId(existing)) await update(TAGS.lessons, recordId(existing), clone(lesson));
-            else await insert(TAGS.lessons, clone(lesson));
-        }
-        for (const [slug, record] of current) {
-            if (target.has(slug) || !recordId(record)) continue;
-            await update(TAGS.lessons, recordId(record), {
-                ...clone(recordData(record)),
-                published: false,
-                archivedAt: new Date().toISOString()
-            });
+    async function applySnapshot(snapshot, options) {
+        const updateGuides = !options || options.updateGuides === true;
+        const updateQuizzes = !options || options.updateQuizzes === true;
+        if (updateGuides) {
+            const records = await searchRecords(TAGS.lessons);
+            const current = new Map(records
+                .filter((record) => recordData(record) && recordData(record).slug)
+                .map((record) => [recordData(record).slug, record]));
+            const target = new Map(snapshot.lessons.map((lesson) => [lesson.slug, lesson]));
+            for (const lesson of snapshot.lessons) {
+                const existing = current.get(lesson.slug);
+                if (existing && recordId(existing)) await update(TAGS.lessons, recordId(existing), clone(lesson));
+                else await insert(TAGS.lessons, clone(lesson));
+            }
+            for (const [slug, record] of current) {
+                if (target.has(slug) || !recordId(record)) continue;
+                await update(TAGS.lessons, recordId(record), {
+                    ...clone(recordData(record)),
+                    published: false,
+                    archivedAt: new Date().toISOString()
+                });
+            }
+            await saveData({ ...clone(snapshot.journeyData), updatedAt: new Date().toISOString() }, TAGS.journeys);
+            if (global.GuidesDeepLinks && typeof global.GuidesDeepLinks.syncGuides === "function") {
+                await global.GuidesDeepLinks.syncGuides(snapshot.lessons);
+                for (const [slug] of current) {
+                    if (!target.has(slug)) await global.GuidesDeepLinks.unregisterGuide(slug);
+                }
+            }
         }
         // Revisions created before quiz snapshots existed intentionally leave
         // current quizzes untouched when restored.
-        if (Array.isArray(snapshot.quizzes)) {
+        if (updateQuizzes && Array.isArray(snapshot.quizzes)) {
             const quizRecords = await searchRecords(TAGS.quizzes);
             const currentQuizzes = new Map(quizRecords
                 .filter((record) => recordData(record) && recordData(record).id)
@@ -472,7 +539,6 @@
                 });
             }
         }
-        await saveData({ ...clone(snapshot.journeyData), updatedAt: new Date().toISOString() }, TAGS.journeys);
     }
 
     function releaseId() {
@@ -498,24 +564,44 @@
         }
         button.dataset.confirmPublish = "true";
         button.textContent = "Click again to publish";
-        setStatus("Click Publish again within 8 seconds to confirm. User progress will be preserved.", "warning");
-        publishConfirmationTimer = setTimeout(resetPublishConfirmation, 8000);
+        const choices = [];
+        if (state.draft && state.draft.options.updateGuides) choices.push("guides and organization");
+        if (state.draft && state.draft.options.updateQuizzes) choices.push("quizzes");
+        setPublishStatus("Publishing " + (choices.length ? "the shell plus " + choices.join(" and ") : "the shell only") + ". Click Publish again within 8 seconds to confirm.", "warning");
+        publishConfirmationTimer = setTimeout(() => {
+            resetPublishConfirmation();
+            setPublishStatus("", "");
+        }, 8000);
         return false;
     }
 
     async function publishDraft() {
         if (!state.draft) return;
+        if (state.draft.selectionError) {
+            setPublishStatus("Resolve the content selection warning before publishing: " + state.draft.selectionError, "error");
+            return;
+        }
         if (!confirmPublishInPage()) return;
         const draft = state.draft;
         const id = releaseId();
         const now = new Date().toISOString();
         try {
             $("publish-release").disabled = true;
-            setStatus("Saving release snapshot…", "loading");
+            // Re-read live content at the last possible moment. Any content type
+            // not explicitly selected remains exactly as the team most recently
+            // saved it, even if it changed after this HTML was staged.
+            const liveBeforePublish = await currentSnapshot();
+            refreshDraftSelection(draft, liveBeforePublish);
+            if (draft.selectionError) throw new Error(draft.selectionError);
+            if (!global.GuidesDeepLinks || typeof global.GuidesDeepLinks.syncAll !== "function") {
+                throw new Error("Guide and quiz deep-link registration is unavailable.");
+            }
+            setPublishStatus("Saving release snapshot…", "loading");
             await insert(TAGS.contentRevisions, {
                 schemaVersion: 1,
                 releaseId: id,
                 createdAt: now,
+                contentUpdate: clone(draft.options),
                 content: clone(draft.target)
             });
             await insert(TAGS.shells, {
@@ -526,11 +612,14 @@
                 fileName: draft.fileName,
                 fileSize: draft.fileSize,
                 description: draft.validation.manifest.description || "",
+                contentUpdate: clone(draft.options),
                 publishedAt: now,
                 html: draft.html
             });
-            setStatus("Applying content changes…", "loading");
-            await applySnapshot(draft.target);
+            setPublishStatus("Applying content changes…", "loading");
+            await applySnapshot(draft.target, draft.options);
+            setPublishStatus("Registering guide and quiz deep links…", "loading");
+            await global.GuidesDeepLinks.syncAll(draft.target.lessons, draft.target.quizzes);
             await saveData({
                 schemaVersion: 1,
                 activeReleaseId: id,
@@ -541,21 +630,21 @@
             state.draft = null;
             renderDraft();
             await loadHistory();
-            setStatus("Release published. The widget will load the new matched design and content.", "success");
+            setStatus("Release published. Unselected live guides or quizzes were preserved.", "success");
             if (typeof buildfire !== "undefined" && buildfire.messaging && typeof buildfire.messaging.sendMessageToWidget === "function") {
                 buildfire.messaging.sendMessageToWidget({ type: "guides-release-published", releaseId: id });
             }
         } catch (error) {
             console.error("Unable to publish guide release", error);
             try {
-                await applySnapshot({ lessons: draft.before.lessons, quizzes: draft.before.quizzes, journeyData: draft.before.journeyData });
-                setStatus("Publish failed and content was restored: " + errorMessage(error), "error");
+                await applySnapshot({ lessons: draft.before.lessons, quizzes: draft.before.quizzes, journeyData: draft.before.journeyData }, draft.options);
+                setPublishStatus("Publish failed and content was restored: " + errorMessage(error), "error");
             } catch (restoreError) {
                 console.error("Unable to restore content after failed release", restoreError);
-                setStatus("Publish failed and automatic restoration also failed. Export content before retrying. " + errorMessage(error), "error");
+                setPublishStatus("Publish failed and automatic restoration also failed. Export content before retrying. " + errorMessage(error), "error");
             }
         } finally {
-            $("publish-release").disabled = false;
+            $("publish-release").disabled = !!(state.draft && state.draft.selectionError);
             resetPublishConfirmation();
         }
     }
@@ -599,7 +688,7 @@
                     restored: true
                 }, TAGS.releaseState);
             } catch (error) {
-                await applySnapshot({ lessons: before.lessons, journeyData: before.journeyData });
+                await applySnapshot({ lessons: before.lessons, quizzes: before.quizzes, journeyData: before.journeyData });
                 throw error;
             }
             state.activeReleaseId = id;
@@ -845,7 +934,7 @@ END GUIDES AI INSTRUCTIONS -->`;
             exportedAt: new Date().toISOString(),
             description: "Describe the requested design and content changes"
         };
-        const previewBootstrap = `<script id="guides-working-preview-bootstrap">(function(){if(window.GuidesAPI)return;function data(){var node=document.getElementById('guides-content');var content=JSON.parse(node&&node.textContent||'{"lessons":[]}');var journeys=content.journeyData&&content.journeyData.journeys||[];var active=journeys.find(function(j){return j.id===(content.journeyData&&content.journeyData.defaultJourneyId);})||journeys[0]||null;return {runtime:{version:1,shellContractVersion:1,preview:true},lessons:(content.lessons||[]).filter(function(g){return g.published!==false;}),quizzes:content.quizzes||[],journeyData:content.journeyData||{journeys:[]},activeJourney:active,progress:{readGuideIds:[],completedQuizIds:[],collapsedJourneySections:[],readerScrollPositions:{}},profile:{babyBirthdate:null},preferences:{},currentUser:{id:'preview-user',displayName:'Preview User',firstName:'Preview'},entitlements:{hasSubscriptions:true,subscriptions:[]}};}var value=data();window.GuidesAPI={version:1,getInitialData:function(){return Promise.resolve(value);},setGuideCompleted:function(slug,completed){var ids=new Set(value.progress.readGuideIds||[]);completed===false?ids.delete(slug):ids.add(slug);value.progress.readGuideIds=Array.from(ids);return Promise.resolve(value.progress);},setQuizCompleted:function(id,completed){var ids=new Set(value.progress.completedQuizIds||[]);completed===false?ids.delete(id):ids.add(id);value.progress.completedQuizIds=Array.from(ids);return Promise.resolve(value.progress);},setBirthdate:function(item){value.profile.babyBirthdate=item||null;return Promise.resolve(value.profile);},savePreference:function(key,item){value.preferences[key]=item;return Promise.resolve(value.preferences);},goBack:function(){return Promise.resolve();},openUrl:function(url){window.open(url,'_blank','noopener');return Promise.resolve();},openActionItem:function(){return Promise.resolve();},openPaywall:function(){return Promise.resolve();},subscribe:function(){},onBack:function(){}};}());<\/script>`;
+        const previewBootstrap = `<script id="guides-working-preview-bootstrap">(function(){if(window.GuidesAPI)return;function data(){var node=document.getElementById('guides-content');var content=JSON.parse(node&&node.textContent||'{"lessons":[]}');var journeys=content.journeyData&&content.journeyData.journeys||[];var active=journeys.find(function(j){return j.id===(content.journeyData&&content.journeyData.defaultJourneyId);})||journeys[0]||null;return {runtime:{version:1,shellContractVersion:1,preview:true},lessons:(content.lessons||[]).filter(function(g){return g.published!==false;}),quizzes:content.quizzes||[],journeyData:content.journeyData||{journeys:[]},activeJourney:active,progress:{readGuideIds:[],completedQuizIds:[],collapsedJourneySections:[],readerScrollPositions:{}},profile:{babyBirthdate:null},preferences:{},currentUser:{id:'preview-user',displayName:'Preview User',firstName:'Preview'},entitlements:{hasSubscriptions:true,subscriptions:[]}};}var value=data();window.GuidesAPI={version:1,getInitialData:function(){return Promise.resolve(value);},setGuideCompleted:function(slug,completed){var ids=new Set(value.progress.readGuideIds||[]);completed===false?ids.delete(slug):ids.add(slug);value.progress.readGuideIds=Array.from(ids);return Promise.resolve(value.progress);},setQuizCompleted:function(id,completed){var ids=new Set(value.progress.completedQuizIds||[]);completed===false?ids.delete(id):ids.add(id);value.progress.completedQuizIds=Array.from(ids);return Promise.resolve(value.progress);},setBirthdate:function(item){value.profile.babyBirthdate=item||null;return Promise.resolve(value.profile);},savePreference:function(key,item){value.preferences[key]=item;return Promise.resolve(value.preferences);},setReaderMode:function(){return Promise.resolve();},goBack:function(){return Promise.resolve();},openUrl:function(url){window.open(url,'_blank','noopener');return Promise.resolve();},openActionItem:function(){return Promise.resolve();},openPaywall:function(){return Promise.resolve();},subscribe:function(){},onBack:function(){}};}());<\/script>`;
         const blocks = instructions + "\n<script id=\"guides-release-manifest\" type=\"application/json\">\n" +
             JSON.stringify(manifest, null, 2).replace(/</g, "\\u003c") + "\n<\/script>\n<script id=\"guides-content\" type=\"application/json\">\n" +
             JSON.stringify(content, null, 2).replace(/</g, "\\u003c") + "\n<\/script>\n" + previewBootstrap;
@@ -906,6 +995,21 @@ END GUIDES AI INSTRUCTIONS -->`;
             setStatus("Staged release discarded.", "");
         });
         $("publish-release").addEventListener("click", publishDraft);
+        ["release-update-guides", "release-update-quizzes"].forEach((id) => {
+            $(id).addEventListener("change", () => {
+                if (!state.draft) return;
+                state.draft.options.updateGuides = $("release-update-guides").checked;
+                state.draft.options.updateQuizzes = $("release-update-quizzes").checked;
+                refreshDraftSelection(state.draft);
+                resetPublishConfirmation();
+                renderDraft();
+                if (state.draft.selectionError) {
+                    setPublishStatus("Select the matching content option to continue: " + state.draft.selectionError, "warning");
+                } else {
+                    setPublishStatus("Release content choices updated. Review the refreshed diff and preview.", "success");
+                }
+            });
+        });
         $("delete-inactive-releases").addEventListener("click", deleteInactiveReleases);
     }
 
