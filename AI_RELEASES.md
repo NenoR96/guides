@@ -17,7 +17,7 @@ letting an AI work with all of them in one HTML file.
 8. Use **Release history** to restore or delete inactive releases.
 
 Restoring a release changes the design and canonical content snapshot. It never
-changes the per-user `reading-progress` record.
+changes authenticated appData progress or anonymous device-local progress.
 
 ## Shell contract v1
 
@@ -102,12 +102,17 @@ archival uses `archivedLessonIds`.
 - `guideLessons`: canonical guide records (legacy storage name retained for compatibility).
 - `guideQuizzes`: canonical quiz definitions, questions, feedback, and result tiers.
 - `guideJourneys`: canonical organization records.
-- `reading-progress`: per-user progress and preferences.
+- `guides-compact-catalog-v1-{instanceId}` in appData: Home-readable compact published catalog.
+- `guides-reading-progress-v1-{instanceId}-{userId}` in appData: authenticated guide/quiz completion and quiz scores.
+- `reading-progress` in userData: read-only legacy migration source; new completion is not written here.
 - `interactiveGuideHtml`: legacy compatibility only.
 
 The runtime continues to open legacy HTML when no versioned release exists.
 Legacy shells are clearly identified during staging because they do not receive
 the safety and persistence guarantees of contract shells.
+
+See `HOME_INTEGRATION.md` for the complete Home contract, refresh points,
+migration behavior, privacy limitation, and consumer fallback rules.
 
 Inactive releases can be deleted from Release history. Deletion removes both
 the immutable `guideShellRevisions` record and its matching

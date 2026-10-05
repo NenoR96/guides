@@ -7,6 +7,8 @@
     <title>Guides Content</title>
     <script src="../../../../scripts/buildfire.min.js"></script>
     <script src="../../../../scripts/tinymce/tinymce.min.js"></script>
+    <script src="../../shared/guides-home-contract.js"></script>
+    <script src="../../shared/guides-catalog-sync.js"></script>
     <script src="migrate-existing-content.js"></script>
     <style>
         * {
@@ -385,6 +387,33 @@
             color: #7b8492;
             font-size: 11px;
             line-height: 1.4;
+        }
+
+        .call-out-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .call-out-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .call-out-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid #e3e6eb;
+            border-radius: 8px;
+            background: #f8faff;
+        }
+
+        .call-out-remove {
+            white-space: nowrap;
         }
 
         input,
@@ -929,6 +958,10 @@
                 grid-column: auto;
             }
 
+            .call-out-row {
+                grid-template-columns: 1fr;
+            }
+
             .quiz-feedback-fields {
                 grid-template-columns: 1fr;
             }
@@ -997,6 +1030,14 @@
                             <div class="field full">
                                 <label for="lesson-title">Title</label>
                                 <input id="lesson-title" required>
+                            </div>
+                            <div class="field full">
+                                <div class="call-out-heading">
+                                    <label>Home call outs</label>
+                                    <button class="btn small" id="add-lesson-call-out" type="button">Add call out</button>
+                                </div>
+                                <div class="call-out-list" id="lesson-call-outs"></div>
+                                <small>Home rotates these daily while the guide remains unread. Each call out can open a different hyperlink or detected “Neste guia” section.</small>
                             </div>
                             <div class="field">
                                 <label for="lesson-theme">Category</label>
@@ -1428,6 +1469,19 @@
                 quizImportFileInput.disabled = isBusy;
             }
 
+            function syncHomeCatalog() {
+                if (!window.GuidesCatalogSync) return Promise.reject(new Error("Home catalog synchronization is unavailable."));
+                return window.GuidesCatalogSync.syncFromSnapshot({
+                    lessons: state.lessons,
+                    quizzes: state.quizzes,
+                    journeyData: {
+                        schemaVersion: 1,
+                        defaultJourneyId: state.defaultJourneyId,
+                        journeys: state.journeys
+                    }
+                });
+            }
+
             function formatBytes(bytes) {
                 if (!Number.isFinite(bytes) || bytes < 0) return "Unknown size";
                 if (bytes < 1024) return bytes + " bytes";
@@ -1537,6 +1591,9 @@
                         purpose: "Ask an AI to return valid JSON only, preserving this structure. Guide records use the compatibility key lessons. A new stable ID creates a guide; an existing stable ID updates that guide without resetting progress.",
                         requiredFields: ["slug", "title", "bodyHtml"],
                         slug: "A unique permanent ID using lowercase letters, numbers, and hyphens only.",
+                        callOuts: "Optional array of Home call outs. Each item has title and anchor; Home rotates them daily while the guide remains unread.",
+                        callOut: "Legacy copy of the first call out title.",
+                        callOutAnchor: "Legacy copy of the first call out anchor.",
                         bodyHtml: "Semantic HTML for the complete guide body. Do not include html, head, script, or body wrapper tags.",
                         tldr: "An array of short key takeaway strings.",
                         phaseKeys: "Relevant baby ages. Allowed values: " + AGE_KEYS.join(", ") + ".",
@@ -1551,6 +1608,9 @@
                         schemaVersion: 1,
                         slug: "replace-with-unique-guide-id",
                         title: "Replace with guide title",
+                        callOuts: [{ title: "Optional Home call out", anchor: "" }],
+                        callOut: "",
+                        callOutAnchor: "",
                         tag: "Replace with a fine-grained tag",
                         icon: "book",
                         readTime: "8 min",
@@ -1587,6 +1647,9 @@
                         schemaVersion: 1,
                         slug: lesson.slug || "",
                         title: lesson.title || "",
+                        callOuts: normalizeLessonCallOuts(lesson),
+                        callOut: lesson.callOut || "",
+                        callOutAnchor: lesson.callOutAnchor || "",
                         tag: lesson.tag || "",
                         icon: lesson.icon || "",
                         readTime: lesson.readTime || "",
@@ -1624,6 +1687,25 @@
                     throw new Error(label + " is missing bodyHtml.");
                 }
                 const bodyHtml = normalizeGuideBodyHtml(value.bodyHtml, label);
+                const rawCallOuts = Array.isArray(value.callOuts)
+                    ? value.callOuts
+                    : (String(value.callOut || "").trim() ? [{ title: value.callOut, anchor: value.callOutAnchor }] : []);
+                const validTargets = new Set(internalGuideLinks(bodyHtml).map((link) => link.id));
+                const callOuts = rawCallOuts.map((item, callOutIndex) => {
+                    if (!item || typeof item !== "object" || Array.isArray(item)) {
+                        throw new Error(label + " callOuts item " + (callOutIndex + 1) + " must be an object.");
+                    }
+                    const callOutTitle = String(item.title || item.callOut || "").trim();
+                    let anchor = String(item.anchor || item.callOutAnchor || "").trim().replace(/^#/, "");
+                    try { anchor = decodeURIComponent(anchor); } catch (error) {}
+                    if (!callOutTitle) throw new Error(label + " callOuts item " + (callOutIndex + 1) + " is missing title.");
+                    if (callOutTitle.length > 75) throw new Error(label + " callOuts item " + (callOutIndex + 1) + " title is longer than 75 characters.");
+                    if (anchor && !validTargets.has(anchor)) {
+                        throw new Error(label + " callOuts item " + (callOutIndex + 1) + " anchor must match a guide target: #" + anchor);
+                    }
+                    return { title: callOutTitle, anchor };
+                });
+                const primaryCallOut = callOuts[0] || { title: "", anchor: "" };
                 const phaseKeys = value.phaseKeys == null ? [] : value.phaseKeys;
                 if (!Array.isArray(phaseKeys) || phaseKeys.some((key) => !AGE_KEYS.includes(String(key)))) {
                     throw new Error(label + " phaseKeys must contain only: " + AGE_KEYS.join(", ") + ".");
@@ -1656,6 +1738,9 @@
                     schemaVersion: 1,
                     slug,
                     title,
+                    callOuts,
+                    callOut: primaryCallOut.title,
+                    callOutAnchor: primaryCallOut.anchor,
                     tag: String(value.tag || "").trim(),
                     icon: String(value.icon || "").trim(),
                     readTime: String(value.readTime || "").trim(),
@@ -1726,6 +1811,7 @@
                         }
                         await syncGuideDeeplinks(lessons);
                         await loadLessons();
+                        await syncHomeCatalog();
                         if (journey && state.selectedJourneyId === journey.id) selectJourney(journey.id);
                         renderLessonFilterOptions();
                         setStatus($("lesson-import-status"), "Imported " + createdCount + " new and updated " + updatedCount + " existing guide(s).", "success");
@@ -2041,6 +2127,162 @@
                 return editor ? editor.getContent() : $("lesson-body").value;
             }
 
+            function internalGuideLinks(html) {
+                const template = document.createElement("template");
+                template.innerHTML = String(html || "");
+                const targetIds = new Set(Array.from(template.content.querySelectorAll("[id]"))
+                    .map((element) => element.id).filter(Boolean));
+                const links = new Map();
+                template.content.querySelectorAll('a[href^="#"]').forEach((link) => {
+                    let id = String(link.getAttribute("href") || "").slice(1).trim();
+                    try { id = decodeURIComponent(id); } catch (error) {}
+                    if (!id || !targetIds.has(id) || links.has(id)) return;
+                    links.set(id, link.textContent.trim() || "#" + id);
+                });
+
+                const hasAuthoredAnchors = !!template.content.querySelector('a[href^="#"]:not([href="#"]), a[data-action-item]');
+                if (!hasAuthoredAnchors) {
+                    template.content.querySelectorAll("p").forEach((paragraph) => {
+                        const text = paragraph.textContent.trim();
+                        const hasMedia = !!paragraph.querySelector("img, video, audio, iframe, picture, svg");
+                        if ((!text && !hasMedia) || /^[·\-.\s]{1,3}$/.test(text) || /^mais\d+$/.test(text)) paragraph.remove();
+                    });
+
+                    let merged = true;
+                    while (merged) {
+                        merged = false;
+                        const paragraphs = Array.from(template.content.querySelectorAll("p"));
+                        for (let index = 0; index < paragraphs.length - 1; index += 1) {
+                            const current = paragraphs[index];
+                            const next = paragraphs[index + 1];
+                            if (current.parentNode !== next.parentNode || current.querySelector("a") || next.querySelector("a")) continue;
+                            const currentText = current.textContent.trim();
+                            const nextText = next.textContent.trim();
+                            if (!currentText || !nextText) continue;
+                            if (!/[.!?:;»"')\]]$/.test(currentText) && /^[a-záàâãéêíóôõúüçñ]/.test(nextText)) {
+                                current.innerHTML = current.innerHTML.trimEnd() + " " + next.innerHTML.trimStart();
+                                next.remove();
+                                merged = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    const paragraphs = Array.from(template.content.querySelectorAll("p"));
+                    const tocItems = [];
+                    for (const paragraph of paragraphs) {
+                        const text = paragraph.textContent.trim();
+                        if (!text) continue;
+                        if (text.length > 110 || /[.,;!]$/.test(text)) break;
+                        tocItems.push({ element: paragraph, text });
+                    }
+                    if (tocItems.length >= 2) {
+                        const tocElements = new Set(tocItems.map((item) => item.element));
+                        const candidates = Array.from(template.content.querySelectorAll("p, h3")).filter((element) => {
+                            if (tocElements.has(element) || element.querySelector("a")) return false;
+                            const text = element.textContent.trim();
+                            const words = text.split(/\s+/).length;
+                            return text.length >= 4 && text.length <= 85 &&
+                                /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ0-9]/.test(text) && !/[.,;!]$/.test(text) && words <= 10;
+                        });
+                        const normalize = (text) => text.replace(/^\d+[.)]\s*/, "").toLowerCase()
+                            .replace(/[^\wáàâãéêíóôõúüç]/g, "");
+                        tocItems.forEach((item, index) => {
+                            const itemText = normalize(item.text);
+                            let matched = false;
+                            candidates.forEach((candidate) => {
+                                const candidateText = normalize(candidate.textContent);
+                                const length = Math.min(itemText.length, candidateText.length, 22);
+                                if (!matched && length >= 4 && itemText.slice(0, length) === candidateText.slice(0, length)) matched = true;
+                            });
+                            if (matched) links.set("gs" + index, item.text);
+                            else if (index === 0 && tocItems[tocItems.length - 1].element.nextElementSibling) {
+                                links.set("gs-intro", item.text);
+                            }
+                        });
+                    }
+                }
+                return Array.from(links, ([id, label]) => ({ id, label }));
+            }
+
+            function normalizeLessonCallOuts(lesson) {
+                const values = Array.isArray(lesson && lesson.callOuts) ? lesson.callOuts : [];
+                const normalized = values.map((item) => ({
+                    title: String(item && (item.title || item.callOut) || "").trim(),
+                    anchor: String(item && (item.anchor || item.callOutAnchor) || "").trim().replace(/^#/, "")
+                })).filter((item) => item.title);
+                if (!normalized.length && lesson && String(lesson.callOut || "").trim()) {
+                    normalized.push({
+                        title: String(lesson.callOut).trim(),
+                        anchor: String(lesson.callOutAnchor || "").trim().replace(/^#/, "")
+                    });
+                }
+                return normalized;
+            }
+
+            function populateCallOutTarget(select, selected) {
+                const current = String(selected == null ? select.value : selected).trim();
+                select.innerHTML = '<option value="">Open at the beginning</option>';
+                internalGuideLinks(getEditorContent()).forEach((link) => {
+                    const option = document.createElement("option");
+                    option.value = link.id;
+                    option.textContent = link.label + " (#" + link.id + ")";
+                    select.appendChild(option);
+                });
+                if (current && !Array.from(select.options).some((option) => option.value === current)) {
+                    const option = document.createElement("option");
+                    option.value = current;
+                    option.textContent = "Previously selected (#" + current + ")";
+                    select.appendChild(option);
+                }
+                select.value = current;
+            }
+
+            function addLessonCallOutRow(value) {
+                const list = $("lesson-call-outs");
+                const row = document.createElement("div");
+                row.className = "call-out-row";
+                const title = document.createElement("input");
+                title.className = "call-out-title";
+                title.maxLength = 75;
+                title.placeholder = "Call out shown on Home";
+                title.value = String(value && value.title || "");
+                const target = document.createElement("select");
+                target.className = "call-out-target";
+                populateCallOutTarget(target, value && value.anchor);
+                const remove = document.createElement("button");
+                remove.className = "btn small danger call-out-remove";
+                remove.type = "button";
+                remove.textContent = "Remove";
+                remove.addEventListener("click", () => {
+                    row.remove();
+                    if (!list.children.length) addLessonCallOutRow({});
+                });
+                row.append(title, target, remove);
+                list.appendChild(row);
+            }
+
+            function renderLessonCallOuts(values) {
+                const list = $("lesson-call-outs");
+                list.innerHTML = "";
+                const callOuts = Array.isArray(values) && values.length ? values : [{}];
+                callOuts.forEach(addLessonCallOutRow);
+            }
+
+            function renderCallOutAnchorOptions() {
+                $("lesson-call-outs").querySelectorAll(".call-out-target")
+                    .forEach((select) => populateCallOutTarget(select));
+            }
+
+            function readLessonCallOuts() {
+                return Array.from($("lesson-call-outs").querySelectorAll(".call-out-row"))
+                    .map((row) => ({
+                        title: row.querySelector(".call-out-title").value.trim(),
+                        anchor: row.querySelector(".call-out-target").value
+                    }))
+                    .filter((item) => item.title);
+            }
+
             function normalizeGuideBodyHtml(html, label) {
                 const template = document.createElement("template");
                 template.innerHTML = String(html || "");
@@ -2218,6 +2460,7 @@
                 renderLessonOrganizationOptions("", []);
                 $("lesson-placement").value = "";
                 setEditorContent("");
+                renderLessonCallOuts([]);
                 setStatus($("lesson-status"), "", "");
                 renderLessonList();
             }
@@ -2255,6 +2498,7 @@
                 $("lesson-premium").checked = !!lesson.premium;
                 $("delete-lesson").hidden = false;
                 setEditorContent(lesson.bodyHtml || "");
+                renderLessonCallOuts(normalizeLessonCallOuts(lesson));
                 setStatus($("lesson-status"), "", "");
                 renderLessonList();
                 if (shouldScroll) {
@@ -2280,11 +2524,20 @@
                 const preserved = { ...(existing || {}) };
                 delete preserved._recordId;
                 delete preserved.summary;
+                const callOuts = readLessonCallOuts();
+                if (callOuts.some((item) => item.title.length > 75)) throw new Error("Call out text cannot exceed 75 characters.");
+                const validCallOutTargets = new Set(internalGuideLinks(getEditorContent()).map((link) => link.id));
+                const invalidCallOut = callOuts.find((item) => item.anchor && !validCallOutTargets.has(item.anchor));
+                if (invalidCallOut) throw new Error("Call out target no longer exists in this guide: #" + invalidCallOut.anchor);
+                const primaryCallOut = callOuts[0] || { title: "", anchor: "" };
                 return {
                     ...preserved,
                     schemaVersion: 1,
                     slug,
                     title: $("lesson-title").value.trim(),
+                    callOuts,
+                    callOut: primaryCallOut.title,
+                    callOutAnchor: primaryCallOut.anchor,
                     tag: $("lesson-tag").value.trim(),
                     icon: $("lesson-icon").value.trim(),
                     readTime: $("lesson-read-time").value.trim(),
@@ -2302,29 +2555,45 @@
                 };
             }
 
+            function replaceOrderedReference(values, removeIds, nextId, shouldInclude) {
+                const source = Array.isArray(values) ? values : [];
+                const previousIndex = source.findIndex((id) => removeIds.has(id));
+                const result = source.filter((id) => !removeIds.has(id));
+                if (shouldInclude) {
+                    const insertAt = previousIndex < 0 ? result.length : Math.min(previousIndex, result.length);
+                    result.splice(insertAt, 0, nextId);
+                }
+                return result;
+            }
+
             function syncJourneyReferencesForLesson(journey, lesson, previousSlug) {
                 if (!journey) return null;
                 const next = clone(journey);
                 const removeIds = new Set([previousSlug, lesson.slug].filter(Boolean));
                 next.listThemes = Array.isArray(next.listThemes) ? next.listThemes : [];
+                const targetTheme = next.listThemes.find((item) => item.key === lesson.listThemeKey);
                 next.listThemes.forEach((theme) => {
-                    theme.lessonIds = (theme.lessonIds || []).filter((id) => !removeIds.has(id));
+                    theme.lessonIds = replaceOrderedReference(
+                        theme.lessonIds,
+                        removeIds,
+                        lesson.slug,
+                        theme === targetTheme
+                    );
                 });
-                const theme = next.listThemes.find((item) => item.key === lesson.listThemeKey);
-                if (theme) theme.lessonIds.push(lesson.slug);
 
                 next.phaseHighlights = next.phaseHighlights || {};
                 AGE_KEYS.forEach((key) => {
-                    next.phaseHighlights[key] = (next.phaseHighlights[key] || []).filter((id) => !removeIds.has(id));
-                    if (lesson.phaseKeys.includes(key)) next.phaseHighlights[key].push(lesson.slug);
+                    next.phaseHighlights[key] = replaceOrderedReference(
+                        next.phaseHighlights[key],
+                        removeIds,
+                        lesson.slug,
+                        lesson.phaseKeys.includes(key)
+                    );
                 });
 
                 next.sections = Array.isArray(next.sections) ? next.sections : [];
-                next.sections.forEach((section) => {
-                    section.lessonIds = (section.lessonIds || []).filter((id) => !removeIds.has(id));
-                });
+                let section = next.sections.find((item) => item.id === lesson.journeySectionKey);
                 if (lesson.journeySectionKey) {
-                    let section = next.sections.find((item) => item.id === lesson.journeySectionKey);
                     if (!section) {
                         section = {
                             id: lesson.journeySectionKey,
@@ -2335,8 +2604,15 @@
                         };
                         next.sections.push(section);
                     }
-                    section.lessonIds.push(lesson.slug);
                 }
+                next.sections.forEach((item) => {
+                    item.lessonIds = replaceOrderedReference(
+                        item.lessonIds,
+                        removeIds,
+                        lesson.slug,
+                        item === section && Boolean(lesson.journeySectionKey)
+                    );
+                });
                 return next;
             }
 
@@ -2375,6 +2651,7 @@
                         await unregisterGuideDeeplink(previous.slug);
                     }
                     await loadLessons();
+                    await syncHomeCatalog();
                     if (syncedJourney && state.selectedJourneyId === syncedJourney.id) selectJourney(syncedJourney.id);
                     const savedId = (result && (result.id || result._id)) ||
                         (state.lessons.find((item) => item.slug === data.slug) || {})._recordId;
@@ -2411,6 +2688,7 @@
                     await saveJourneyCollection();
                     await unregisterGuideDeeplink(lesson.slug);
                     await loadLessons();
+                    await syncHomeCatalog();
                     if (state.selectedJourneyId && state.journeys.some((item) => item.id === state.selectedJourneyId)) {
                         selectJourney(state.selectedJourneyId);
                     }
@@ -2998,6 +3276,7 @@
                     await saveJourneyCollection();
                     await syncLessonOrganizationMetadata(journey);
                     await loadLessons();
+                    await syncHomeCatalog();
                     state.selectedJourneyId = journey.id;
                     selectJourney(journey.id);
                     setStatus($("journey-status"), "Organization saved.", "success");
@@ -3020,6 +3299,7 @@
                         state.defaultJourneyId = state.journeys.length ? state.journeys[0].id : "";
                     }
                     await persistJourneys(null, "Journey deleted.");
+                    await syncHomeCatalog();
                 } catch (error) {
                     console.error("Unable to delete journey", error);
                     setStatus($("journey-status"), errorMessage(error), "error");
@@ -3519,6 +3799,7 @@
                         await unregisterQuizDeeplink(previous.id);
                     }
                     await loadQuizzes();
+                    await syncHomeCatalog();
                     const savedId = (result && (result.id || result._id)) ||
                         (state.quizzes.find((item) => item.id === quiz.id) || {})._recordId;
                     if (savedId) selectQuiz(savedId, false);
@@ -3560,6 +3841,7 @@
                     await deleteQuiz(quiz._recordId);
                     await unregisterQuizDeeplink(quiz.id);
                     await loadQuizzes();
+                    await syncHomeCatalog();
                     clearQuizForm(false);
                     setStatus($("quiz-status"), "Quiz deleted.", "success");
                 } catch (error) { setStatus($("quiz-status"), errorMessage(error), "error"); }
@@ -3594,6 +3876,7 @@
                 }
                 await syncQuizDeeplinks(quizzes);
                 await loadQuizzes();
+                await syncHomeCatalog();
                 return { created, updated, total: quizzes.length };
             }
 
@@ -3626,6 +3909,7 @@
                     setStatus($("quiz-import-status"), "Importing extracted quizzes…", "loading");
                     const result = await window.importNewQuizData();
                     await loadQuizzes();
+                    await syncHomeCatalog();
                     setStatus($("quiz-import-status"), "Imported " + result.results.quizzesInserted.length + " new and updated " + result.results.quizzesUpdated.length + " quiz(zes).", "success");
                 } catch (error) { setStatus($("quiz-import-status"), errorMessage(error), "error"); }
                 finally { setBusy(false); }
@@ -3664,6 +3948,7 @@
                         clearJourneyForm();
                     }
                     showUploadedHtml(htmlData);
+                    await syncHomeCatalog();
                     setStatus(
                         $("html-status"),
                         htmlData && typeof htmlData.html === "string" && htmlData.html.trim()
@@ -3799,6 +4084,8 @@
             $("export-content").addEventListener("click", exportCompleteContent);
             $("register-all-guide-deeplinks").addEventListener("click", registerAllGuideDeeplinks);
             $("download-lesson-template").addEventListener("click", downloadLessonTemplate);
+			$("add-lesson-call-out").addEventListener("click", () => addLessonCallOutRow({}));
+			$("lesson-body").addEventListener("input", () => renderCallOutAnchorOptions());
             $("import-lessons").addEventListener("click", () => lessonImportFileInput.click());
             $("export-lessons").addEventListener("click", exportLessons);
             lessonImportFileInput.addEventListener("change", (event) => {
@@ -3825,6 +4112,7 @@
                     extended_valid_elements: "div[id|class|style|dir|data-ig|data-icon|data-icon-sm|data-bar],span[id|class|style|dir],p[id|class|style|dir],a[id|class|style|href|target|title|rel|data-action-item],img[id|class|style|src|alt|title|width|height|data-bf-image],blockquote[id|class|style|dir],hr[id|class|style],sup[id|class|style]",
                     setup(editor) {
                         editor.on("init", initialize);
+                        editor.on("change input undo redo SetContent", () => renderCallOutAnchorOptions());
                     }
                 });
                 if (editorPromise && typeof editorPromise.catch === "function") {

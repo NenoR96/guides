@@ -1,0 +1,7 @@
+{
+  "name": "buildfire-interactive-guides",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

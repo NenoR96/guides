@@ -542,6 +542,12 @@
             logProgress(options, "Preserved existing journey: " + JOURNEY_ID);
         }
 
+        if (!global.GuidesCatalogSync || typeof global.GuidesCatalogSync.syncFromDatastore !== "function") {
+            throw new Error("Home catalog synchronization is unavailable.");
+        }
+        await global.GuidesCatalogSync.syncFromDatastore();
+        logProgress(options, "Synchronized the Home compact catalog.");
+
         logProgress(options, "Migration complete.", results);
         return { lessons, quizzes, journey, plan, results };
     }

@@ -539,6 +539,10 @@
                 });
             }
         }
+        if (!global.GuidesCatalogSync || typeof global.GuidesCatalogSync.syncFromDatastore !== "function") {
+            throw new Error("Home catalog synchronization is unavailable.");
+        }
+        await global.GuidesCatalogSync.syncFromDatastore();
     }
 
     function releaseId() {

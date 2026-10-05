@@ -21640,11 +21640,14 @@ END GUIDES AI INSTRUCTIONS -->
     // O duplo requestAnimationFrame espera o layout assentar antes de rolar —
     // sem isso, em alguns WebViews o scrollTo roda antes do reflow e o guia
     // parece abrir "no meio do texto".
-    function scrollReaderToSavedPosition(guideId) {
+    function scrollReaderToSavedPosition(guideId, anchor) {
       const fraction = readerScrollPositions[guideId];
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (fraction) {
+          const anchorTarget = anchor && document.getElementById(anchor);
+          if (anchorTarget) {
+            scrollToGuideSection(anchor);
+          } else if (fraction) {
             scrollContainerTo(getScrollMetrics().scrollable * fraction);
             showResumeToast();
           } else {
@@ -23888,7 +23891,7 @@ END GUIDES AI INSTRUCTIONS -->
       }
     }
 
-    function openGuide(id, from) {
+    function openGuide(id, from, anchor) {
       // A jornada cobre guias de qualquer fase, então cai no ALL_GUIDES_FLAT
       // quando o guia não estiver na lista da fase/tela atual.
       const guide = allCurrentGuides.find(g => g.id === id) || ALL_GUIDES_FLAT.find(g => g.id === id);
@@ -23942,7 +23945,7 @@ END GUIDES AI INSTRUCTIONS -->
       renderRelatedGuides(guide);
 
       showScreen('reader');
-      scrollReaderToSavedPosition(id);
+      scrollReaderToSavedPosition(id, anchor);
       updateReaderProgressBar();
     }
 
@@ -23951,13 +23954,16 @@ END GUIDES AI INSTRUCTIONS -->
       if (!data) return;
       if (data.type === 'quiz') {
         const quizId = String(data.quizId || '').trim();
-        if (quizId && QUIZ_BY_ID[quizId]) openQuizPlay(quizId);
+        if (quizId && QUIZ_BY_ID[quizId]) {
+          openQuizPlay(quizId);
+          if (data.origin === 'app-home') quizReturnScreen = 'age';
+        }
         return;
       }
       if (data.type && data.type !== 'guide') return;
       const guideId = String(data.guideId || data.slug || '').trim();
       if (!guideId || !ALL_GUIDES_FLAT.some(guide => guide.id === guideId)) return;
-      openGuide(guideId, 'deeplink');
+      openGuide(guideId, 'deeplink', String(data.anchor || '').trim());
     }
 
     // ─────────────────────────────────────────────

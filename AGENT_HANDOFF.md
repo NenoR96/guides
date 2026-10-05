@@ -1,6 +1,6 @@
 # Interactive Guides plugin — agent handoff
 
-Last updated: 2026-08-14 (Europe/Sarajevo)
+Last updated: 2026-09-18 (Europe/Sarajevo)
 
 ## Objective
 
@@ -106,7 +106,7 @@ There are three different kinds of state, and fixes must avoid confusing them:
 
 - **Design/shell:** the complete uploaded HTML, CSS, and client-side rendering code stored in `guideShellRevisions`.
 - **Canonical content:** guides, quizzes, journey organization, and matched release snapshots stored in plugin datastore.
-- **Per-user state:** reading and quiz progress stored under `reading-progress` using BuildFire user data, plus runtime-managed preferences.
+- **Per-user state:** authenticated reading/quiz progress and quiz scores stored in versioned, instance/user-scoped appData; anonymous completion and private UI/profile preferences remain device-local. `reading-progress` userData is read-only legacy migration input.
 
 Publishing or restoring a release may change design and canonical content. It must never erase or replace per-user progress.
 
@@ -200,7 +200,9 @@ guideJourneys
 guideReleaseState
 guideShellRevisions
 guideContentRevisions
-reading-progress
+guides-compact-catalog-v1-{instanceId}        appData Home projection
+guides-reading-progress-v1-{instanceId}-{userId} appData authenticated progress
+reading-progress                              read-only legacy userData migration source
 interactiveGuideHtml        Legacy fallback only
 ```
 
@@ -241,7 +243,7 @@ The working HTML uses `GuidesAPI` for initial state, guide completion, quiz comp
 - resolve subscription entitlement outside the sandbox;
 - expose `entitlements` to the shell;
 - add a protected `GuidesAPI.openPaywall()` bridge;
-- preserve existing progress behavior.
+- preserve the GuidesAPI behavior while moving completion to serialized appData mutations.
 
 `control/content/release-manager.js` previews and `AI_RELEASES.md` were updated for `entitlements` and `openPaywall()`.
 

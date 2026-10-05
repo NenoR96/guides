@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Interactive Guides</title>
     <script src="../../../scripts/buildfire.min.js"></script>
+    <script src="guides-home-contract.js"></script>
     <style>
         :root {
             --brand: #14577c;
@@ -264,9 +265,7 @@
             const LESSON_TAG = "guideLessons";
             const JOURNEY_TAG = "guideJourneys";
             const LEGACY_TAG = "interactiveGuideHtml";
-            // Keep the legacy progress tag/field so migrating content does not
-            // reset guides that a user already completed.
-            const PROGRESS_TAG = "reading-progress";
+            const LEGACY_PROGRESS_TAG = "reading-progress";
             const LOCAL_PROGRESS_PREFIX = "guides:readGuides";
             const PAGE_SIZE = 50;
             const app = document.getElementById("app");
@@ -277,6 +276,9 @@
                 journey: null,
                 completed: new Set(),
                 progressData: {},
+                progressTag: null,
+                progressQueue: Promise.resolve(),
+                currentUser: null,
                 localProgressKey: LOCAL_PROGRESS_PREFIX + ":anonymous",
                 activeScreen: "home"
             };
@@ -387,35 +389,66 @@
 
             async function loadProgress() {
                 const user = await getCurrentUser();
-                state.localProgressKey = LOCAL_PROGRESS_PREFIX + ":" + progressOwnerKey(user);
-                try {
-                    state.completed = new Set(JSON.parse(localStorage.getItem(state.localProgressKey) || "[]"));
-                } catch (error) {
-                    state.completed = new Set();
+                state.currentUser = user;
+                state.localProgressKey = LOCAL_PROGRESS_PREFIX + ":anonymous";
+                let anonymousIds = [];
+                try { anonymousIds = GuidesHomeContract.normalizeIds(JSON.parse(localStorage.getItem(state.localProgressKey) || "[]")); }
+                catch (error) { /* Ignore malformed anonymous cache. */ }
+                if (!user) {
+                    state.completed = new Set(anonymousIds);
+                    return;
                 }
-                return new Promise((resolve) => {
-                    if (!buildfire.userData) return resolve();
-                    buildfire.userData.get(PROGRESS_TAG, (error, result) => {
-                        if (!error && result && result.data) {
-                            state.progressData = result.data;
-                            const remoteIds = result.data.readGuides || result.data.readLessons || [];
-                            remoteIds.forEach((id) => state.completed.add(id));
-                            localStorage.setItem(state.localProgressKey, JSON.stringify(Array.from(state.completed)));
-                        }
-                        resolve();
-                    });
-                });
+                const context = buildfire.getContext && buildfire.getContext() || {};
+                const instanceId = String(context.instanceId || context.pluginInstanceId || "").trim();
+                const userId = String(user._id || "").trim();
+                state.progressTag = GuidesHomeContract.progressTag(instanceId, userId);
+                if (!state.progressTag) throw new Error("Authenticated progress requires instanceId and the user's stable _id.");
+                const getAppProgress = () => new Promise((resolve, reject) => buildfire.appData.get(state.progressTag,
+                    (error, result) => error ? reject(error) : resolve(result && result.data || null)));
+                const getLegacy = () => new Promise((resolve) => buildfire.userData.get(LEGACY_PROGRESS_TAG,
+                    (error, result) => resolve(error ? null : (result && result.data || null))));
+                const [raw, legacy] = await Promise.all([getAppProgress(), getLegacy()]);
+                let progress = !GuidesHomeContract.isEmptyRecord(raw) ? GuidesHomeContract.normalizeProgress(raw, instanceId, userId)
+                    : GuidesHomeContract.blankProgress(instanceId, userId);
+                if (!progress) throw new Error("The progress document does not match the current instance and user.");
+                if (progress.migrationVersion < 1) {
+                    progress = GuidesHomeContract.mergeCompletion(progress, GuidesHomeContract.legacyCompletion(legacy));
+                    progress.migrationVersion = 1;
+                    progress.migratedFromUserDataAt = new Date().toISOString();
+                }
+                progress = GuidesHomeContract.mergeCompletion(progress, { readGuideIds: anonymousIds });
+                if (GuidesHomeContract.isEmptyRecord(raw) || progress.migrationVersion !== raw.migrationVersion ||
+                    JSON.stringify(progress.readGuideIds) !== JSON.stringify(raw.readGuideIds || [])) {
+                    progress.revision = Math.max(0, Number(progress.revision) || 0) + 1;
+                    progress.updatedAt = new Date().toISOString();
+                    await new Promise((resolve, reject) => buildfire.appData.save(progress, state.progressTag,
+                        (error) => error ? reject(error) : resolve()));
+                }
+                state.progressData = progress;
+                state.completed = new Set(progress.readGuideIds);
             }
 
             function saveProgress() {
                 const readLessons = Array.from(state.completed);
-                localStorage.setItem(state.localProgressKey, JSON.stringify(readLessons));
-                if (buildfire.userData) {
-                    state.progressData = { ...state.progressData, readGuides: readLessons };
-                    buildfire.userData.save(state.progressData, PROGRESS_TAG, (error) => {
-                        if (error) console.error("Unable to save guide progress", error);
-                    });
+                if (!state.currentUser) {
+                    localStorage.setItem(state.localProgressKey, JSON.stringify(readLessons));
+                    return Promise.resolve();
                 }
+                const operation = state.progressQueue.then(async () => {
+                    const raw = await new Promise((resolve, reject) => buildfire.appData.get(state.progressTag,
+                        (error, result) => error ? reject(error) : resolve(result && result.data || null)));
+                    const latest = GuidesHomeContract.normalizeProgress(raw,
+                        state.progressData.sourceInstanceId, state.progressData.userId);
+                    if (!latest) throw new Error("The progress document does not match the current instance and user.");
+                    latest.readGuideIds = GuidesHomeContract.normalizeIds(readLessons);
+                    latest.revision += 1;
+                    latest.updatedAt = new Date().toISOString();
+                    await new Promise((resolve, reject) => buildfire.appData.save(latest, state.progressTag,
+                        (error) => error ? reject(error) : resolve()));
+                    state.progressData = latest;
+                });
+                state.progressQueue = operation.catch(() => {});
+                return operation;
             }
 
             function deriveSections() {
@@ -509,7 +542,7 @@
                 document.getElementById("toggle-complete").addEventListener("click", () => {
                     if (state.completed.has(slug)) state.completed.delete(slug);
                     else state.completed.add(slug);
-                    saveProgress();
+                    saveProgress().catch((error) => console.error("Unable to save guide progress", error));
                     renderReader(slug);
                 });
                 prepareGuideContent(document.getElementById("lesson-content"));
@@ -554,7 +587,11 @@
                     const [lessons, journeyData] = await Promise.all([
                         searchAllLessons(),
                         getData(JOURNEY_TAG),
-                        loadProgress()
+                        loadProgress().catch((error) => {
+                            console.error("Unable to load guide progress; continuing without saved progress", error);
+                            state.currentUser = null;
+                            state.progressData = {};
+                        })
                     ]);
                     state.lessons = lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false);
                     state.lessonById = new Map(state.lessons.map((lesson) => [lesson.slug, lesson]));

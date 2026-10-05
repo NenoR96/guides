@@ -1,687 +1,806 @@
 (function (global) {
-    "use strict";
+	'use strict';
 
-    // Persisted releases use the legacy key "lessons" for guide records.
-    const TAGS = {
-        lessons: "guideLessons",
-        quizzes: "guideQuizzes",
-        journeys: "guideJourneys",
-        legacyHtml: "interactiveGuideHtml",
-        releaseState: "guideReleaseState",
-        shells: "guideShellRevisions",
-        progress: "reading-progress"
-    };
-    const PAGE_SIZE = 50;
-    const LOCAL_PROGRESS_PREFIX = "guides:readGuides";
-    const LEGACY_LOCAL_PREFIXES = {
-        babyBirthdate: "guides:babyBirthdate",
-        collapsedJourneySections: "guides:journeyCollapsedSections",
-        homeViewMode: "guides:homeViewMode",
-        completedQuizzes: "guides:completedQuizzes",
-        readerScrollPositions: "guides:readerScrollPositions"
-    };
-    let started = false;
-    let runtimeState = null;
-    let startupDeepLink = null;
+	const Contract = global.GuidesHomeContract;
 
-    function deepLinkFromValue(value) {
-        const data = value && value.deeplinkData ? value.deeplinkData : value;
-        if (!data) return null;
-        if (data.type === "quiz") {
-            const quizId = String(data.quizId || "").trim();
-            return /^[a-zA-Z0-9._-]{1,120}$/.test(quizId) ? { type: "quiz", quizId } : null;
-        }
-        if (data.type && data.type !== "guide") return null;
-        const guideId = String(data.guideId || data.slug || "").trim();
-        return /^[a-zA-Z0-9._-]{1,120}$/.test(guideId) ? { type: "guide", guideId } : null;
-    }
+	// Persisted releases use the legacy key "lessons" for guide records.
+	const TAGS = {
+		lessons: 'guideLessons',
+		quizzes: 'guideQuizzes',
+		journeys: 'guideJourneys',
+		legacyHtml: 'interactiveGuideHtml',
+		releaseState: 'guideReleaseState',
+		shells: 'guideShellRevisions',
+		legacyProgress: 'reading-progress'
+	};
+	const PAGE_SIZE = 50;
+	const LOCAL_PROGRESS_PREFIX = 'guides:readGuides';
+	const LEGACY_LOCAL_PREFIXES = {
+		babyBirthdate: 'guides:babyBirthdate',
+		collapsedJourneySections: 'guides:journeyCollapsedSections',
+		homeViewMode: 'guides:homeViewMode',
+		completedQuizzes: 'guides:completedQuizzes',
+		quizScores: 'guides:quizScores',
+		readerScrollPositions: 'guides:readerScrollPositions'
+	};
+	let started = false;
+	let runtimeState = null;
+	let startupDeepLink = null;
 
-    function guideIdFromDeepLink(value) {
-        const deepLink = deepLinkFromValue(value);
-        return deepLink && deepLink.type === "guide" ? deepLink.guideId : null;
-    }
+	function deepLinkFromValue(value) {
+		return Contract ? Contract.normalizeDeepLink(value) : null;
+	}
 
-    function receiveDeepLink(value) {
-        const deepLink = deepLinkFromValue(value);
-        if (!deepLink) return;
-        if (!runtimeState) {
-            startupDeepLink = deepLink;
-            return;
-        }
-        runtimeState.pendingDeepLink = deepLink;
-        if (runtimeState.shellReady && runtimeState.frame) {
-            sendFrame(runtimeState.frame, { type: "deeplink", data: deepLink });
-            runtimeState.pendingDeepLink = null;
-        } else if (deepLink.type === "guide" && typeof runtimeState.openGuide === "function") {
-            runtimeState.openGuide(deepLink.guideId);
-            runtimeState.pendingDeepLink = null;
-        }
-    }
+	function guideIdFromDeepLink(value) {
+		const deepLink = deepLinkFromValue(value);
+		return deepLink && deepLink.type === 'guide' ? deepLink.guideId : null;
+	}
 
-    function listenForDeepLinks() {
-        if (!buildfire.deeplink) return;
-        if (typeof buildfire.deeplink.getData === "function") {
-            buildfire.deeplink.getData(receiveDeepLink);
-        }
-        if (typeof buildfire.deeplink.onUpdate === "function") {
-            buildfire.deeplink.onUpdate(receiveDeepLink, true);
-        }
-    }
+	function receiveDeepLink(value) {
+		const deepLink = deepLinkFromValue(value);
+		if (!deepLink) return;
+		if (!runtimeState) {
+			startupDeepLink = deepLink;
+			return;
+		}
+		runtimeState.pendingDeepLink = deepLink;
+		if (runtimeState.shellReady && runtimeState.frame) {
+			sendFrame(runtimeState.frame, { type: 'deeplink', data: deepLink });
+			runtimeState.pendingDeepLink = null;
+		} else if (deepLink.type === 'guide' && typeof runtimeState.openGuide === 'function') {
+			runtimeState.openGuide(deepLink.guideId, deepLink.anchor);
+			runtimeState.pendingDeepLink = null;
+		}
+	}
 
-    function getData(tag) {
-        return new Promise((resolve, reject) => {
-            buildfire.datastore.get(tag, (error, result) => {
-                if (error) reject(error);
-                else resolve(result && result.data ? result.data : null);
-            });
-        });
-    }
+	function listenForDeepLinks() {
+		if (!buildfire.deeplink) return;
+		if (typeof buildfire.deeplink.getData === 'function') {
+			buildfire.deeplink.getData(receiveDeepLink);
+		}
+		if (typeof buildfire.deeplink.onUpdate === 'function') {
+			buildfire.deeplink.onUpdate(receiveDeepLink, true);
+		}
+	}
 
-    function searchPage(tag, page) {
-        return new Promise((resolve, reject) => {
-            buildfire.datastore.search({ page, pageSize: PAGE_SIZE }, tag, (error, result) => {
-                if (error) reject(error);
-                else resolve(Array.isArray(result) ? result : ((result && result.result) || []));
-            });
-        });
-    }
+	function getData(tag) {
+		return new Promise((resolve, reject) => {
+			buildfire.datastore.get(tag, (error, result) => {
+				if (error) reject(error);
+				else resolve(result && result.data ? result.data : null);
+			});
+		});
+	}
 
-    async function searchAll(tag) {
-        const records = [];
-        for (let page = 0; ; page += 1) {
-            const batch = await searchPage(tag, page);
-            records.push(...batch);
-            if (batch.length < PAGE_SIZE) break;
-        }
-        return records.map((record) => record && record.data ? record.data : record);
-    }
+	function searchPage(tag, page) {
+		return new Promise((resolve, reject) => {
+			buildfire.datastore.search({ page, pageSize: PAGE_SIZE }, tag, (error, result) => {
+				if (error) reject(error);
+				else resolve(Array.isArray(result) ? result : ((result && result.result) || []));
+			});
+		});
+	}
 
-    function getCurrentUser() {
-        return new Promise((resolve) => {
-            if (!buildfire.auth || typeof buildfire.auth.getCurrentUser !== "function") return resolve(null);
-            buildfire.auth.getCurrentUser((error, user) => resolve(error ? null : (user || null)));
-        });
-    }
+	async function searchAll(tag) {
+		const records = [];
+		for (let page = 0; ; page += 1) {
+			const batch = await searchPage(tag, page);
+			records.push(...batch);
+			if (batch.length < PAGE_SIZE) break;
+		}
+		return records.map((record) => record && record.data ? record.data : record);
+	}
 
-    function ownerKey(user) {
-        const id = user && (user._id || user.id || user.userId || user.email);
-        return id ? "user:" + encodeURIComponent(String(id)) : "anonymous";
-    }
+	function getCurrentUser() {
+		return new Promise((resolve) => {
+			if (!buildfire.auth || typeof buildfire.auth.getCurrentUser !== 'function') return resolve(null);
+			buildfire.auth.getCurrentUser((error, user) => resolve(error ? null : (user || null)));
+		});
+	}
 
-    function publicUser(user) {
-        if (!user) return null;
-        return {
-            id: user._id || user.id || user.userId || null,
-            displayName: user.displayName || user.name || null,
-            firstName: user.firstName || null
-        };
-    }
+	function ownerKey(user) {
+		const id = user && (user._id || user.id || user.userId || user.email);
+		return id ? 'user:' + encodeURIComponent(String(id)) : 'anonymous';
+	}
 
-    function clone(value) {
-        return value == null ? value : JSON.parse(JSON.stringify(value));
-    }
+	function publicUser(user) {
+		if (!user) return null;
+		return {
+			id: user._id || user.id || user.userId || null,
+			displayName: user.displayName || user.name || null,
+			firstName: user.firstName || null
+		};
+	}
 
-    function escapeHtml(value) {
-        return String(value == null ? "" : value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
+	function clone(value) {
+		return value == null ? value : JSON.parse(JSON.stringify(value));
+	}
 
-    function parseActionItem(value) {
-        const source = String(value || "").trim();
-        const candidates = [source];
-        try { candidates.push(decodeURIComponent(source)); } catch (error) { /* legacy Latin-1 encoding */ }
-        if (typeof global.unescape === "function") candidates.push(global.unescape(source));
-        for (const candidate of candidates) {
-            try {
-                const parsed = JSON.parse(candidate);
-                if (parsed && typeof parsed === "object") return parsed;
-            } catch (error) { /* try the next supported encoding */ }
-        }
-        return null;
-    }
+	function escapeHtml(value) {
+		return String(value == null ? '' : value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/\"/g, '&quot;')
+			.replace(/'/g, '&#039;');
+	}
 
-    function guideIdFromActionItem(action) {
-        if (!action || typeof action !== "object" || Array.isArray(action)) return null;
-        const context = buildfire.getContext && buildfire.getContext() || {};
-        const currentInstanceId = String(context.instanceId || context.pluginInstanceId || "");
-        const targetInstanceId = String(action.instanceId || "");
-        if (currentInstanceId && targetInstanceId && currentInstanceId !== targetInstanceId) return null;
+	function parseActionItem(value) {
+		const source = String(value || '').trim();
+		const candidates = [source];
+		try { candidates.push(decodeURIComponent(source)); } catch (error) { /* legacy Latin-1 encoding */ }
+		if (typeof global.unescape === 'function') candidates.push(global.unescape(source));
+		for (const candidate of candidates) {
+			try {
+				const parsed = JSON.parse(candidate);
+				if (parsed && typeof parsed === 'object') return parsed;
+			} catch (error) { /* try the next supported encoding */ }
+		}
+		return null;
+	}
 
-        if (action.deeplinkData) {
-            const directId = guideIdFromDeepLink(action.deeplinkData);
-            if (directId) return directId;
-        }
+	function guideIdFromActionItem(action) {
+		if (!action || typeof action !== 'object' || Array.isArray(action)) return null;
+		const context = buildfire.getContext && buildfire.getContext() || {};
+		const currentInstanceId = String(context.instanceId || context.pluginInstanceId || '');
+		const targetInstanceId = String(action.instanceId || '');
+		if (currentInstanceId && targetInstanceId && currentInstanceId !== targetInstanceId) return null;
 
-        const queryString = String(action.queryString || "").replace(/^\?/, "");
-        if (queryString) {
-            try {
-                const encoded = new URLSearchParams(queryString).get("dld");
-                if (encoded) {
-                    let decoded = encoded;
-                    try { decoded = decodeURIComponent(decoded); } catch (error) { /* URLSearchParams may already decode it */ }
-                    const deepLinkData = JSON.parse(decoded);
-                    const queryId = guideIdFromDeepLink(deepLinkData);
-                    if (queryId) return queryId;
-                }
-            } catch (error) { /* fall back to the registered deep-link ID */ }
-        }
+		if (action.deeplinkData) {
+			const directId = guideIdFromDeepLink(action.deeplinkData);
+			if (directId) return directId;
+		}
 
-        const deeplinkId = String(action.deeplinkId || "");
-        return deeplinkId.startsWith("guide-")
-            ? guideIdFromDeepLink({ type: "guide", guideId: deeplinkId.slice(6) })
-            : null;
-    }
+		const queryString = String(action.queryString || '').replace(/^\?/, '');
+		if (queryString) {
+			try {
+				const encoded = new URLSearchParams(queryString).get('dld');
+				if (encoded) {
+					let decoded = encoded;
+					try { decoded = decodeURIComponent(decoded); } catch (error) { /* URLSearchParams may already decode it */ }
+					const deepLinkData = JSON.parse(decoded);
+					const queryId = guideIdFromDeepLink(deepLinkData);
+					if (queryId) return queryId;
+				}
+			} catch (error) { /* fall back to the registered deep-link ID */ }
+		}
 
-    function prepareGuideContent(content) {
-        if (!content) return;
-        content.querySelectorAll("script").forEach((script) => script.remove());
-        content.querySelectorAll("*").forEach((element) => {
-            Array.from(element.attributes).forEach((attribute) => {
-                const name = attribute.name.toLowerCase();
-                const value = attribute.value.trim().toLowerCase();
-                if (name.startsWith("on") || name === "srcdoc") element.removeAttribute(attribute.name);
-                else if (["href", "src", "xlink:href"].includes(name) && value.startsWith("javascript:")) {
-                    element.removeAttribute(attribute.name);
-                }
-            });
-        });
-        if (buildfire.navigation && typeof buildfire.navigation.makeSafeLinks === "function") {
-            buildfire.navigation.makeSafeLinks(content);
-        }
-        content.addEventListener("click", (event) => {
-            const link = event.target.closest && event.target.closest("a");
-            if (!link || !content.contains(link)) return;
-            const encodedAction = link.getAttribute("data-action-item");
-            if (encodedAction) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                const action = parseActionItem(encodedAction);
-                const internalGuideId = guideIdFromActionItem(action);
-                if (internalGuideId) {
-                    receiveDeepLink({ type: "guide", guideId: internalGuideId });
-                } else if (action && buildfire.actionItems && typeof buildfire.actionItems.execute === "function") {
-                    buildfire.actionItems.execute(action, () => { });
-                }
-                return;
-            }
-            const href = link.getAttribute("href") || "";
-            if (href.length > 1 && href.charAt(0) === "#") {
-                const target = document.getElementById(decodeURIComponent(href.slice(1)));
-                if (target && content.contains(target)) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    target.scrollIntoView({ behavior: "smooth", block: "start" });
-                }
-            }
-        }, true);
-    }
+		const deeplinkId = String(action.deeplinkId || '');
+		return deeplinkId.startsWith('guide-')
+			? guideIdFromDeepLink({ type: 'guide', guideId: deeplinkId.slice(6) })
+			: null;
+	}
 
-    function shellContract(html) {
-        const match = String(html || "").match(/<meta\s+[^>]*name=["']guides-shell-contract["'][^>]*content=["'](\d+)["'][^>]*>/i) ||
-            String(html || "").match(/<meta\s+[^>]*content=["'](\d+)["'][^>]*name=["']guides-shell-contract["'][^>]*>/i);
-        return match ? Number(match[1]) : 0;
-    }
+	function prepareGuideContent(content) {
+		if (!content) return;
+		content.querySelectorAll('script').forEach((script) => script.remove());
+		content.querySelectorAll('*').forEach((element) => {
+			Array.from(element.attributes).forEach((attribute) => {
+				const name = attribute.name.toLowerCase();
+				const value = attribute.value.trim().toLowerCase();
+				if (name.startsWith('on') || name === 'srcdoc') element.removeAttribute(attribute.name);
+				else if (['href', 'src', 'xlink:href'].includes(name) && value.startsWith('javascript:')) {
+					element.removeAttribute(attribute.name);
+				}
+			});
+		});
+		if (buildfire.navigation && typeof buildfire.navigation.makeSafeLinks === 'function') {
+			buildfire.navigation.makeSafeLinks(content);
+		}
+		content.addEventListener('click', (event) => {
+			const link = event.target.closest && event.target.closest('a');
+			if (!link || !content.contains(link)) return;
+			const encodedAction = link.getAttribute('data-action-item');
+			if (encodedAction) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				const action = parseActionItem(encodedAction);
+				const internalGuideId = guideIdFromActionItem(action);
+				if (internalGuideId) {
+					receiveDeepLink({ type: 'guide', guideId: internalGuideId });
+				} else if (action && buildfire.actionItems && typeof buildfire.actionItems.execute === 'function') {
+					buildfire.actionItems.execute(action, () => { });
+				}
+				return;
+			}
+			const href = link.getAttribute('href') || '';
+			if (href.length > 1 && href.charAt(0) === '#') {
+				const target = document.getElementById(decodeURIComponent(href.slice(1)));
+				if (target && content.contains(target)) {
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			}
+		}, true);
+	}
 
-    function createState() {
-        return {
-            lessons: [],
-            quizzes: [],
-            journeyData: { journeys: [] },
-            activeJourney: null,
-            completed: new Set(),
-            progressData: {},
-            preferences: {},
-            progressOwnerKey: "anonymous",
-            localProgressKey: LOCAL_PROGRESS_PREFIX + ":anonymous",
-            currentUser: null,
-            entitlements: { hasSubscriptions: false, subscriptions: [] },
-            activeRelease: null,
-            frame: null,
-            shellReady: false,
-            openGuide: null,
-            pendingDeepLink: startupDeepLink
-        };
-    }
+	function shellContract(html) {
+		const match = String(html || '').match(/<meta\s+[^>]*name=["']guides-shell-contract["'][^>]*content=["'](\d+)["'][^>]*>/i) ||
+            String(html || '').match(/<meta\s+[^>]*content=["'](\d+)["'][^>]*name=["']guides-shell-contract["'][^>]*>/i);
+		return match ? Number(match[1]) : 0;
+	}
 
-    async function loadProgress(state) {
-        state.currentUser = await getCurrentUser();
-        const scopedOwner = ownerKey(state.currentUser);
-        state.progressOwnerKey = scopedOwner;
-        state.localProgressKey = LOCAL_PROGRESS_PREFIX + ":" + scopedOwner;
-        try {
-            state.completed = new Set(JSON.parse(localStorage.getItem(state.localProgressKey) || "[]"));
-        } catch (error) {
-            state.completed = new Set();
-        }
-        await new Promise((resolve) => {
-            if (!buildfire.userData) return resolve();
-            buildfire.userData.get(TAGS.progress, (error, result) => {
-                if (!error && result && result.data) {
-                    state.progressData = result.data;
-                    state.preferences = result.data.preferences && typeof result.data.preferences === "object"
-                        ? { ...result.data.preferences } : {};
-                    if (result.data.babyBirthdate && !state.preferences.babyBirthdate) state.preferences.babyBirthdate = result.data.babyBirthdate;
-                    if (Array.isArray(result.data.collapsedJourneySections) && !state.preferences.collapsedJourneySections) {
-                        state.preferences.collapsedJourneySections = result.data.collapsedJourneySections.slice();
-                    }
-                    if (Array.isArray(result.data.completedQuizzes) && !state.preferences.completedQuizzes) {
-                        state.preferences.completedQuizzes = result.data.completedQuizzes.slice();
-                    }
-                    const remoteIds = result.data.readGuides || result.data.readLessons || [];
-                    remoteIds.forEach((id) => state.completed.add(id));
-                }
-                Object.entries(LEGACY_LOCAL_PREFIXES).forEach(([key, prefix]) => {
-                    if (state.preferences[key] != null) return;
-                    const raw = localStorage.getItem(prefix + ":" + scopedOwner);
-                    if (raw == null) return;
-                    if (["homeViewMode", "babyBirthdate"].includes(key)) state.preferences[key] = raw;
-                    else {
-                        try { state.preferences[key] = JSON.parse(raw); }
-                        catch (parseError) { /* leave malformed legacy cache unused */ }
-                    }
-                });
-                localStorage.setItem(state.localProgressKey, JSON.stringify(Array.from(state.completed)));
-                resolve();
-            });
-        });
-    }
+	function createState() {
+		return {
+			lessons: [],
+			quizzes: [],
+			journeyData: { journeys: [] },
+			activeJourney: null,
+			completed: new Set(),
+			completedQuizzes: new Set(),
+			progressData: {},
+			preferences: {},
+			progressOwnerKey: 'anonymous',
+			localProgressKey: LOCAL_PROGRESS_PREFIX + ':anonymous',
+			currentUser: null,
+			instanceId: null,
+			userId: null,
+			mutateProgress: null,
+			entitlements: { hasSubscriptions: false, subscriptions: [] },
+			activeRelease: null,
+			frame: null,
+			shellReady: false,
+			openGuide: null,
+			pendingDeepLink: startupDeepLink
+		};
+	}
 
-    function saveProgress(state) {
-        const readGuides = Array.from(state.completed);
-        localStorage.setItem(state.localProgressKey, JSON.stringify(readGuides));
-        Object.entries(LEGACY_LOCAL_PREFIXES).forEach(([key, prefix]) => {
-            const value = state.preferences[key];
-            if (value == null) return;
-            localStorage.setItem(
-                prefix + ":" + state.progressOwnerKey,
-                ["homeViewMode", "babyBirthdate"].includes(key) ? String(value) : JSON.stringify(value)
-            );
-        });
-        if (!buildfire.userData) return Promise.resolve();
-        state.progressData = {
-            ...state.progressData,
-            readGuides,
-            preferences: { ...state.preferences },
-            babyBirthdate: state.preferences.babyBirthdate || state.progressData.babyBirthdate || null,
-            collapsedJourneySections: Array.isArray(state.preferences.collapsedJourneySections)
-                ? state.preferences.collapsedJourneySections.slice() : (state.progressData.collapsedJourneySections || []),
-            completedQuizzes: Array.isArray(state.preferences.completedQuizzes)
-                ? state.preferences.completedQuizzes.slice() : (state.progressData.completedQuizzes || [])
-        };
-        return new Promise((resolve, reject) => {
-            buildfire.userData.save(state.progressData, TAGS.progress, (error) => {
-                if (error) reject(error);
-                else resolve();
-            });
-        });
-    }
+	function appDataGet(tag) {
+		return new Promise((resolve, reject) => {
+			if (!buildfire.appData || typeof buildfire.appData.get !== 'function') return reject(new Error('BuildFire appData is unavailable.'));
+			buildfire.appData.get(tag, (error, result) => error ? reject(error) : resolve(result && result.data ? result.data : null));
+		});
+	}
 
-    function bootstrapData(state) {
-        return {
-            runtime: { version: 1, shellContractVersion: 1, releaseId: state.activeRelease && state.activeRelease.releaseId || null },
-            lessons: clone(state.lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false)),
-            quizzes: clone(state.quizzes.filter((quiz) => quiz && quiz.id && quiz.published !== false)),
-            journeyData: clone(state.journeyData),
-            activeJourney: clone(state.activeJourney),
-            progress: {
-                readGuideIds: Array.from(state.completed),
-                completedQuizIds: clone(state.preferences.completedQuizzes || []),
-                collapsedJourneySections: clone(state.preferences.collapsedJourneySections || []),
-                readerScrollPositions: clone(state.preferences.readerScrollPositions || {})
-            },
-            profile: { babyBirthdate: state.preferences.babyBirthdate || null },
-            preferences: clone(state.preferences),
-            currentUser: publicUser(state.currentUser),
-            entitlements: clone(state.entitlements),
-            deepLink: clone(state.pendingDeepLink)
-        };
-    }
+	function appDataSave(data, tag) {
+		return new Promise((resolve, reject) => {
+			buildfire.appData.save(data, tag, (error, result) => error ? reject(error) : resolve(result));
+		});
+	}
 
-    function checkPurchased(productId) {
-        return new Promise((resolve) => {
-            const iap = buildfire.services && buildfire.services.commerce && buildfire.services.commerce.inAppPurchase;
-            if (!iap || typeof iap.checkIsPurchased !== "function") return resolve(false);
-            iap.checkIsPurchased({ productId, type: "subscriptions" }, (error, purchased) => {
-                resolve(!error && purchased === true);
-            });
-        });
-    }
+	function legacyUserData() {
+		return new Promise((resolve) => {
+			if (!buildfire.userData || typeof buildfire.userData.get !== 'function') return resolve(null);
+			buildfire.userData.get(TAGS.legacyProgress, (error, result) => resolve(error ? null : (result && result.data || null)));
+		});
+	}
 
-    async function loadEntitlements(user) {
-        const context = buildfire.getContext && buildfire.getContext() || {};
-        if (context.device && context.device.platform === "web") {
-            return { hasSubscriptions: true, subscriptions: [] };
-        }
-        const appId = context.appId;
-        const appTags = user && user.tags && appId && user.tags[appId];
-        if (Array.isArray(appTags) && appTags.some((tag) => {
-            return ["bypass", "bypass-purchase", "bypasspurchase"].includes(tag && tag.tagName);
-        })) {
-            return { hasSubscriptions: true, subscriptions: [], bypass: true };
-        }
-        const iap = buildfire.services && buildfire.services.commerce && buildfire.services.commerce.inAppPurchase;
-        if (!iap || typeof iap.getSubscriptions !== "function") {
-            return { hasSubscriptions: false, subscriptions: [] };
-        }
-        const subscriptions = await new Promise((resolve) => {
-            iap.getSubscriptions((error, result) => resolve(error ? [] : (result || [])));
-        });
-        const purchased = await Promise.all(subscriptions.map((item) => checkPurchased(item.id)));
-        return {
-            hasSubscriptions: purchased.some(Boolean),
-            subscriptions: subscriptions.map((item) => ({ id: item.id, title: item.title || item.name || "" }))
-        };
-    }
+	function getBuildfireContext() {
+		return new Promise((resolve, reject) => {
+			if (!buildfire.getContext) return resolve({});
+			try {
+				const immediate = buildfire.getContext((error, value) => error ? reject(error) : resolve(value || {}));
+				if (immediate && typeof immediate === 'object') resolve(immediate);
+			} catch (error) { reject(error); }
+		});
+	}
 
-    function injectShellBridge(html) {
-        const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' data:; style-src 'unsafe-inline'; img-src data: blob: https:; media-src data: blob: https:; font-src data: https:; frame-src https:; connect-src 'none'; form-action 'none'; base-uri 'none'">`;
-        const bridge = policy + `<script>(function(){\n` +
-            `var seq=0,pending={},initialResolve;var initial=new Promise(function(r){initialResolve=r;});\n` +
-            `function send(action,payload){return new Promise(function(resolve,reject){var id='g'+(++seq);pending[id]={resolve:resolve,reject:reject};parent.postMessage({source:'guides-shell',type:'request',id:id,action:action,payload:payload||{}},'*');});}\n` +
-            `window.GuidesAPI={version:1,getInitialData:function(){return initial;},setGuideCompleted:function(slug,completed){return send('setGuideCompleted',{slug:slug,completed:completed});},setQuizCompleted:function(id,completed){return send('setQuizCompleted',{id:id,completed:completed});},setBirthdate:function(value){return send('setBirthdate',{value:value});},savePreference:function(key,value){return send('savePreference',{key:key,value:value});},setReaderMode:function(enabled){return send('setReaderMode',{enabled:enabled});},goBack:function(){return send('goBack');},openUrl:function(url){return send('openUrl',{url:url});},openActionItem:function(action){return send('openActionItem',{action:action});},openPaywall:function(){return send('openPaywall');},subscribe:function(fn){window.addEventListener('guides:data',function(e){fn(e.detail);});},onBack:function(fn){window.addEventListener('guides:back',fn);},onDeepLink:function(fn){window.addEventListener('guides:deeplink',function(e){fn(e.detail);});}};\n` +
-            `window.addEventListener('message',function(e){var m=e.data||{};if(m.source!=='guides-runtime')return;if(m.type==='init'){window.__GUIDES_INITIAL_DATA__=m.data;initialResolve(m.data);window.dispatchEvent(new CustomEvent('guides:data',{detail:m.data}));}if(m.type==='back'){window.dispatchEvent(new CustomEvent('guides:back'));}if(m.type==='deeplink'){window.dispatchEvent(new CustomEvent('guides:deeplink',{detail:m.data}));}if(m.type==='response'&&pending[m.id]){var p=pending[m.id];delete pending[m.id];m.error?p.reject(new Error(m.error)):p.resolve(m.data);}});\n` +
-            `window.addEventListener('error',function(e){parent.postMessage({source:'guides-shell',type:'error',message:e.message||'Shell error'},'*');});\n` +
-            `parent.postMessage({source:'guides-shell',type:'ready',contractVersion:1},'*');\n` +
-            `}());<\/script>`;
-        return /<head\b[^>]*>/i.test(html)
-            ? html.replace(/<head\b[^>]*>/i, (head) => head + bridge)
-            : bridge + html;
-    }
+	function loadLocalArray(key) {
+		try { return Contract.normalizeIds(JSON.parse(localStorage.getItem(key) || '[]')); }
+		catch (error) { return []; }
+	}
 
-    function sendFrame(frame, message) {
-        if (frame && frame.contentWindow) frame.contentWindow.postMessage({ source: "guides-runtime", ...message }, "*");
-    }
+	function localValue(key) {
+		try { return localStorage.getItem(key); }
+		catch (error) {
+			console.error('Unable to read Guides local storage', error);
+			return null;
+		}
+	}
 
-    function openUrl(url) {
-        const safe = String(url || "").trim();
-        if (!/^https?:\/\//i.test(safe)) throw new Error("Only http and https links are supported.");
-        if (buildfire.navigation && typeof buildfire.navigation.openWindow === "function") {
-            buildfire.navigation.openWindow(safe, "_blank");
-        } else {
-            window.open(safe, "_blank", "noopener");
-        }
-    }
+	function saveLocalValue(key, value) {
+		try {
+			localStorage.setItem(key, value);
+			return true;
+		} catch (error) {
+			console.error('Unable to save Guides local storage', error);
+			return false;
+		}
+	}
 
-    function navigateAppHome() {
-        if (buildfire.navigation && typeof buildfire.navigation.navigateHome === "function") {
-            buildfire.navigation.navigateHome();
-        }
-    }
+	function loadLocalPreferences(state, legacy) {
+		const source = legacy && typeof legacy === 'object' ? legacy : {};
+		state.preferences = source.preferences && typeof source.preferences === 'object' ? { ...source.preferences } : {};
+		if (source.babyBirthdate && !state.preferences.babyBirthdate) state.preferences.babyBirthdate = source.babyBirthdate;
+		if (Array.isArray(source.collapsedJourneySections) && !state.preferences.collapsedJourneySections) {
+			state.preferences.collapsedJourneySections = source.collapsedJourneySections.slice();
+		}
+		delete state.preferences.completedQuizzes;
+		delete state.preferences.completedQuizIds;
+		Object.entries(LEGACY_LOCAL_PREFIXES).forEach(([key, prefix]) => {
+			if (key === 'completedQuizzes' || state.preferences[key] != null) return;
+			const raw = localValue(prefix + ':' + state.progressOwnerKey);
+			if (raw == null) return;
+			if (['homeViewMode', 'babyBirthdate'].includes(key)) state.preferences[key] = raw;
+			else {
+				try { state.preferences[key] = JSON.parse(raw); }
+				catch (parseError) { /* Ignore malformed device preferences. */ }
+			}
+		});
+	}
 
-    function renderContractShell(app, html, state) {
-        app.innerHTML = "";
-        app.classList.add("contract-shell");
-        const frame = document.createElement("iframe");
-        frame.title = "Interactive guides";
-        frame.setAttribute("sandbox", "allow-scripts allow-forms allow-popups allow-modals");
-        // Flex with a zero minimum follows host resizing when the native bars
-        // hide/show. Safe-area padding belongs to the host, outside the iframe.
-        frame.style.cssText = "display:block;flex:1 1 0;width:100%;height:100%;min-height:0;min-width:0;border:0;background:#fff";
-        state.frame = frame;
-        app.appendChild(frame);
+	function saveLocalPreferences(state) {
+		Object.entries(LEGACY_LOCAL_PREFIXES).forEach(([key, prefix]) => {
+			if (key === 'completedQuizzes') return;
+			const value = state.preferences[key];
+			if (value == null) return;
+			saveLocalValue(prefix + ':' + state.progressOwnerKey,
+				['homeViewMode', 'babyBirthdate'].includes(key) ? String(value) : JSON.stringify(value));
+		});
+	}
 
-        let ready = false;
-        let fallbackTimer;
-        let readerMode = false;
-        let readerModeQueue = Promise.resolve();
-        function setReaderMode(enabled) {
-            const operation = readerModeQueue.then(async () => {
-                if (readerMode === enabled) return;
-                const appearance = buildfire.appearance;
-                const method = enabled ? "hide" : "show";
-                // BuildFire names the app footer "navbar".
-                // Track partial failures so leaving the reader still shows both bars.
-                readerMode = null;
-                const results = await Promise.allSettled(["titlebar", "navbar"].map((name) =>
-                    new Promise((resolve, reject) => {
-                        const bar = appearance && appearance[name];
-                        if (!bar || typeof bar[method] !== "function") {
-                            return reject(new Error("BuildFire appearance." + name + "." + method + " is unavailable."));
-                        }
-                        bar[method](null, (error) => {
-                            if (error) return reject(new Error(String(error)));
-                            resolve();
-                        });
-                    })
-                ));
-                const failure = results.find((result) => result.status === "rejected");
-                if (failure) throw failure.reason;
-                readerMode = enabled;
-            });
-            readerModeQueue = operation.catch(() => {});
-            return operation;
-        }
-        const onMessage = async (event) => {
-            if (event.source !== frame.contentWindow) return;
-            const message = event.data || {};
-            if (message.source !== "guides-shell") return;
-            if (message.type === "ready") {
-                ready = true;
-                state.shellReady = true;
-                clearTimeout(fallbackTimer);
-                sendFrame(frame, { type: "init", data: bootstrapData(state) });
-                state.pendingDeepLink = null;
-                return;
-            }
-            if (message.type === "error") {
-                console.error("Uploaded guide shell error:", message.message);
-                return;
-            }
-            if (message.type !== "request") return;
-            try {
-                let result = null;
-                if (message.action === "setGuideCompleted") {
-                    const slug = String(message.payload && message.payload.slug || "");
-                    if (!state.lessons.some((lesson) => lesson.slug === slug)) throw new Error("Unknown guide ID.");
-                    if (message.payload.completed === false) state.completed.delete(slug);
-                    else state.completed.add(slug);
-                    await saveProgress(state);
-                    result = bootstrapData(state).progress;
-                } else if (message.action === "setQuizCompleted") {
-                    const id = String(message.payload && message.payload.id || "").trim();
-                    if (!/^[a-zA-Z0-9._-]{1,120}$/.test(id)) throw new Error("Invalid quiz ID.");
-                    const completed = new Set(state.preferences.completedQuizzes || []);
-                    message.payload.completed === false ? completed.delete(id) : completed.add(id);
-                    state.preferences.completedQuizzes = Array.from(completed);
-                    await saveProgress(state);
-                    result = bootstrapData(state).progress;
-                } else if (message.action === "setBirthdate") {
-                    const value = String(message.payload && message.payload.value || "");
-                    if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Birthdate must use YYYY-MM-DD.");
-                    if (value && new Date(value + "T00:00:00") > new Date()) throw new Error("Birthdate cannot be in the future.");
-                    state.preferences.babyBirthdate = value || null;
-                    await saveProgress(state);
-                    result = bootstrapData(state).profile;
-                } else if (message.action === "savePreference") {
-                    const key = String(message.payload && message.payload.key || "").trim();
-                    if (!/^[a-zA-Z0-9._-]{1,80}$/.test(key)) throw new Error("Invalid preference key.");
-                    state.preferences[key] = clone(message.payload.value);
-                    await saveProgress(state);
-                    result = clone(state.preferences);
-                } else if (message.action === "setReaderMode") {
-                    if (!message.payload || typeof message.payload.enabled !== "boolean") throw new Error("Reader mode must be a boolean.");
-                    await setReaderMode(message.payload.enabled);
-                } else if (message.action === "goBack") {
-                    await setReaderMode(false);
-                    navigateAppHome();
-                } else if (message.action === "openUrl") {
-                    openUrl(message.payload && message.payload.url);
-                } else if (message.action === "openActionItem") {
-                    const action = message.payload && message.payload.action;
-                    if (!action || typeof action !== "object" || Array.isArray(action)) throw new Error("Invalid action item.");
-                    const internalGuideId = guideIdFromActionItem(action);
-                    if (internalGuideId) {
-                        receiveDeepLink({ type: "guide", guideId: internalGuideId });
-                    } else if (!buildfire.actionItems || typeof buildfire.actionItems.execute !== "function") {
-                        throw new Error("Action items are unavailable.");
-                    } else {
-                        buildfire.actionItems.execute(action, () => { });
-                    }
-                } else if (message.action === "openPaywall") {
-                    if (!buildfire.navigation || typeof buildfire.navigation.navigateTo !== "function") {
-                        throw new Error("Subscription screen is unavailable.");
-                    }
-                    const context = buildfire.getContext && buildfire.getContext() || {};
-                    buildfire.navigation.navigateTo({
-                        pluginId: "ccd96f38-4fe8-4751-b0dd-d7320f43a417",
-                        queryString: context.instanceId ? "instanceId=" + encodeURIComponent(context.instanceId) : ""
-                    });
-                } else {
-                    throw new Error("Unsupported GuidesAPI action: " + message.action);
-                }
-                sendFrame(frame, { type: "response", id: message.id, data: result });
-            } catch (error) {
-                sendFrame(frame, { type: "response", id: message.id, error: error.message || String(error) });
-            }
-        };
-        window.addEventListener("message", onMessage);
-        frame.srcdoc = injectShellBridge(html);
-        if (buildfire.navigation) {
-            buildfire.navigation.onBackButtonClick = () => sendFrame(frame, { type: "back" });
-        }
-        fallbackTimer = setTimeout(() => {
-            if (!ready) {
-                window.removeEventListener("message", onMessage);
-                app.classList.remove("contract-shell");
-                console.error("Uploaded guide shell did not complete the contract handshake; using the built-in renderer.");
-                renderBuiltIn(app, state, "The uploaded design could not start, so a safe fallback is shown.");
-            }
-        }, 5000);
-    }
+	function useLocalProgressFallback(state, error) {
+		console.error('Unable to load shared Guides progress; continuing with local empty progress', error);
+		state.mutateProgress = null;
+		state.localProgressKey = LOCAL_PROGRESS_PREFIX + ':anonymous';
+		state.completed = new Set(loadLocalArray(state.localProgressKey));
+		state.completedQuizzes = new Set(loadLocalArray(LEGACY_LOCAL_PREFIXES.completedQuizzes + ':anonymous'));
+		state.progressData = {};
+		if (!state.preferences || typeof state.preferences !== 'object') state.preferences = {};
+	}
 
-    function renderLegacy(html) {
-        const bootstrap = '<script>(function(){if(typeof buildfire!=="undefined"&&buildfire._postMessageHandler){window.removeEventListener("message",buildfire._postMessageHandler,false);window.addEventListener("message",buildfire._postMessageHandler,false);}}());<\/script>';
-        const hydrated = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (head) => head + bootstrap) : bootstrap + html;
-        document.open();
-        document.write(hydrated);
-        document.close();
-    }
+	async function loadProgress(state) {
+		if (!Contract) throw new Error('Guides Home contract helpers are unavailable.');
+		state.currentUser = await getCurrentUser();
+		const appContext = await getBuildfireContext();
+		state.instanceId = String(appContext.instanceId || appContext.pluginInstanceId || '').trim() || null;
+		state.userId = state.currentUser && String(state.currentUser._id || '').trim() || null;
+		const scopedOwner = ownerKey(state.currentUser);
+		state.progressOwnerKey = scopedOwner;
+		const legacy = state.currentUser ? await legacyUserData() : null;
+		loadLocalPreferences(state, legacy);
+		const anonymousGuides = loadLocalArray(LOCAL_PROGRESS_PREFIX + ':anonymous');
+		const anonymousQuizzes = loadLocalArray(LEGACY_LOCAL_PREFIXES.completedQuizzes + ':anonymous');
 
-    function renderBuiltIn(app, state, notice) {
-        const published = state.lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false);
-        const byId = new Map(published.map((lesson) => [lesson.slug, lesson]));
-        const configured = state.activeJourney && Array.isArray(state.activeJourney.sections) ? state.activeJourney.sections : [];
-        const seen = new Set();
-        const sections = configured.map((section) => {
-            const lessons = (section.lessonIds || []).map((id) => byId.get(id)).filter(Boolean);
-            lessons.forEach((lesson) => seen.add(lesson.slug));
-            return { ...section, lessons };
-        });
-        const remaining = published.filter((lesson) => !seen.has(lesson.slug));
-        if (remaining.length) sections.push({ id: "library", title: sections.length ? "More guides" : "All guides", lessons: remaining });
-        let activeScreen = "home";
+		if (!state.currentUser) {
+			state.localProgressKey = LOCAL_PROGRESS_PREFIX + ':anonymous';
+			state.completed = new Set(anonymousGuides);
+			state.completedQuizzes = new Set(anonymousQuizzes);
+			return;
+		}
+		const tag = Contract.progressTag(state.instanceId, state.userId);
+		if (!tag) throw new Error('Authenticated Guides progress requires instanceId and the user\'s stable _id.');
+		const readLatest = async () => {
+			const raw = await appDataGet(tag);
+			// BuildFire may represent a missing appData tag as { data: {} }.
+			// Treat that empty placeholder as absent, not as an identity mismatch.
+			if (Contract.isEmptyRecord(raw)) return Contract.blankProgress(state.instanceId, state.userId);
+			const normalized = Contract.normalizeProgress(raw, state.instanceId, state.userId);
+			if (!normalized) throw new Error('The Guides progress document does not match the current instance and user.');
+			return normalized;
+		};
+		state.mutateProgress = Contract.serializeMutations(readLatest, (value) => appDataSave(value, tag));
+		let progress = await readLatest();
+		const needsMigration = progress.migrationVersion < Contract.MIGRATION_VERSION;
+		const anonymousCompletion = { readGuideIds: anonymousGuides, completedQuizIds: anonymousQuizzes };
+		const merged = Contract.migrateProgress(progress, legacy, anonymousCompletion);
+		const mergeChanged = JSON.stringify(merged.readGuideIds) !== JSON.stringify(progress.readGuideIds) ||
+            JSON.stringify(merged.completedQuizIds) !== JSON.stringify(progress.completedQuizIds) ||
+            JSON.stringify(merged.quizScores) !== JSON.stringify(progress.quizScores);
+		if (needsMigration || mergeChanged) {
+			progress = await state.mutateProgress((latest) => {
+				return Contract.migrateProgress(latest, legacy, anonymousCompletion);
+			});
+		}
+		state.progressData = progress;
+		state.completed = new Set(progress.readGuideIds);
+		state.completedQuizzes = new Set(progress.completedQuizIds);
+		state.preferences.quizScores = clone(progress.quizScores);
+	}
 
-        function home() {
-            activeScreen = "home";
-            const completedCount = published.filter((lesson) => state.completed.has(lesson.slug)).length;
-            app.innerHTML = (notice ? '<div style="padding:10px 14px;background:#fff4d6;color:#704f00;font:13px sans-serif">' + escapeHtml(notice) + '</div>' : '') +
+	async function setCompletion(state, type, id, completed) {
+		if (!state.currentUser || typeof state.mutateProgress !== 'function') {
+			const target = type === 'quiz' ? state.completedQuizzes : state.completed;
+			completed === false ? target.delete(id) : target.add(id);
+			const key = type === 'quiz' ? LEGACY_LOCAL_PREFIXES.completedQuizzes + ':anonymous' : LOCAL_PROGRESS_PREFIX + ':anonymous';
+			saveLocalValue(key, JSON.stringify(Array.from(target)));
+			return;
+		}
+		try {
+			const saved = await state.mutateProgress((latest) => {
+				return Contract.setCompleted(latest, type, id, completed);
+			});
+			state.progressData = saved;
+			state.completed = new Set(saved.readGuideIds);
+			state.completedQuizzes = new Set(saved.completedQuizIds);
+		} catch (error) {
+			const target = type === 'quiz' ? state.completedQuizzes : state.completed;
+			completed === false ? target.delete(id) : target.add(id);
+			const key = type === 'quiz' ? LEGACY_LOCAL_PREFIXES.completedQuizzes + ':anonymous' : LOCAL_PROGRESS_PREFIX + ':anonymous';
+			saveLocalValue(key, JSON.stringify(Array.from(target)));
+			console.error('Unable to save shared Guides progress; stored local fallback', error);
+		}
+	}
+
+	function bootstrapData(state) {
+		return {
+			runtime: { version: 1, shellContractVersion: 1, releaseId: state.activeRelease && state.activeRelease.releaseId || null },
+			lessons: clone(state.lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false)),
+			quizzes: clone(state.quizzes.filter((quiz) => quiz && quiz.id && quiz.published !== false)),
+			journeyData: clone(state.journeyData),
+			activeJourney: clone(state.activeJourney),
+			progress: {
+				readGuideIds: Array.from(state.completed),
+				completedQuizIds: Array.from(state.completedQuizzes),
+				collapsedJourneySections: clone(state.preferences.collapsedJourneySections || []),
+				readerScrollPositions: clone(state.preferences.readerScrollPositions || {})
+			},
+			profile: { babyBirthdate: state.preferences.babyBirthdate || null },
+			preferences: clone(state.preferences),
+			currentUser: publicUser(state.currentUser),
+			entitlements: clone(state.entitlements),
+			deepLink: clone(state.pendingDeepLink)
+		};
+	}
+
+	function checkPurchased(productId) {
+		return new Promise((resolve) => {
+			const iap = buildfire.services && buildfire.services.commerce && buildfire.services.commerce.inAppPurchase;
+			if (!iap || typeof iap.checkIsPurchased !== 'function') return resolve(false);
+			iap.checkIsPurchased({ productId, type: 'subscriptions' }, (error, purchased) => {
+				resolve(!error && purchased === true);
+			});
+		});
+	}
+
+	async function loadEntitlements(user) {
+		const context = buildfire.getContext && buildfire.getContext() || {};
+		if (context.device && context.device.platform === 'web') {
+			return { hasSubscriptions: true, subscriptions: [] };
+		}
+		const appId = context.appId;
+		const appTags = user && user.tags && appId && user.tags[appId];
+		if (Array.isArray(appTags) && appTags.some((tag) => {
+			return ['bypass', 'bypass-purchase', 'bypasspurchase'].includes(tag && tag.tagName);
+		})) {
+			return { hasSubscriptions: true, subscriptions: [], bypass: true };
+		}
+		const iap = buildfire.services && buildfire.services.commerce && buildfire.services.commerce.inAppPurchase;
+		if (!iap || typeof iap.getSubscriptions !== 'function') {
+			return { hasSubscriptions: false, subscriptions: [] };
+		}
+		const subscriptions = await new Promise((resolve) => {
+			iap.getSubscriptions((error, result) => resolve(error ? [] : (result || [])));
+		});
+		const purchased = await Promise.all(subscriptions.map((item) => checkPurchased(item.id)));
+		return {
+			hasSubscriptions: purchased.some(Boolean),
+			subscriptions: subscriptions.map((item) => ({ id: item.id, title: item.title || item.name || '' }))
+		};
+	}
+
+	function injectShellBridge(html) {
+		const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' data:; style-src \'unsafe-inline\'; img-src data: blob: https:; media-src data: blob: https:; font-src data: https:; frame-src https:; connect-src \'none\'; form-action \'none\'; base-uri \'none\'">';
+		const bridge = policy + '<script>(function(){\n' +
+            'var seq=0,pending={},initialResolve;var initial=new Promise(function(r){initialResolve=r;});\n' +
+            'function send(action,payload){return new Promise(function(resolve,reject){var id=\'g\'+(++seq);pending[id]={resolve:resolve,reject:reject};parent.postMessage({source:\'guides-shell\',type:\'request\',id:id,action:action,payload:payload||{}},\'*\');});}\n' +
+            'window.GuidesAPI={version:1,getInitialData:function(){return initial;},setGuideCompleted:function(slug,completed){return send(\'setGuideCompleted\',{slug:slug,completed:completed});},setQuizCompleted:function(id,completed){return send(\'setQuizCompleted\',{id:id,completed:completed});},setBirthdate:function(value){return send(\'setBirthdate\',{value:value});},savePreference:function(key,value){return send(\'savePreference\',{key:key,value:value});},setReaderMode:function(enabled){return send(\'setReaderMode\',{enabled:enabled});},goBack:function(){return send(\'goBack\');},openUrl:function(url){return send(\'openUrl\',{url:url});},openActionItem:function(action){return send(\'openActionItem\',{action:action});},openPaywall:function(){return send(\'openPaywall\');},subscribe:function(fn){window.addEventListener(\'guides:data\',function(e){fn(e.detail);});},onBack:function(fn){window.addEventListener(\'guides:back\',fn);},onDeepLink:function(fn){window.addEventListener(\'guides:deeplink\',function(e){fn(e.detail);});}};\n' +
+            'function scrollToDeepLinkAnchor(data){var id=data&&data.anchor;if(!id)return;var tries=0;function find(){var target=document.getElementById(id);if(target){setTimeout(function(){if(typeof window.scrollToGuideSection===\'function\')window.scrollToGuideSection(id);else target.scrollIntoView({behavior:\'smooth\',block:\'start\'});},120);return;}if(tries++<40)setTimeout(find,50);}setTimeout(find,0);}\n' +
+            'window.addEventListener(\'message\',function(e){var m=e.data||{};if(m.source!==\'guides-runtime\')return;if(m.type===\'init\'){window.__GUIDES_INITIAL_DATA__=m.data;initialResolve(m.data);window.dispatchEvent(new CustomEvent(\'guides:data\',{detail:m.data}));scrollToDeepLinkAnchor(m.data&&m.data.deepLink);}if(m.type===\'back\'){window.dispatchEvent(new CustomEvent(\'guides:back\'));}if(m.type===\'deeplink\'){window.dispatchEvent(new CustomEvent(\'guides:deeplink\',{detail:m.data}));scrollToDeepLinkAnchor(m.data);}if(m.type===\'response\'&&pending[m.id]){var p=pending[m.id];delete pending[m.id];m.error?p.reject(new Error(m.error)):p.resolve(m.data);}});\n' +
+            'window.addEventListener(\'error\',function(e){parent.postMessage({source:\'guides-shell\',type:\'error\',message:e.message||\'Shell error\'},\'*\');});\n' +
+            'parent.postMessage({source:\'guides-shell\',type:\'ready\',contractVersion:1},\'*\');\n' +
+            '}());<\/script>';
+		return /<head\b[^>]*>/i.test(html)
+			? html.replace(/<head\b[^>]*>/i, (head) => head + bridge)
+			: bridge + html;
+	}
+
+	function sendFrame(frame, message) {
+		if (frame && frame.contentWindow) frame.contentWindow.postMessage({ source: 'guides-runtime', ...message }, '*');
+	}
+
+	function openUrl(url) {
+		const safe = String(url || '').trim();
+		if (!/^https?:\/\//i.test(safe)) throw new Error('Only http and https links are supported.');
+		if (buildfire.navigation && typeof buildfire.navigation.openWindow === 'function') {
+			buildfire.navigation.openWindow(safe, '_blank');
+		} else {
+			window.open(safe, '_blank', 'noopener');
+		}
+	}
+
+	function navigateAppHome() {
+		if (buildfire.navigation && typeof buildfire.navigation.navigateHome === 'function') {
+			buildfire.navigation.navigateHome();
+		}
+	}
+
+	function renderContractShell(app, html, state) {
+		app.innerHTML = '';
+		app.classList.add('contract-shell');
+		const frame = document.createElement('iframe');
+		frame.title = 'Interactive guides';
+		frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-modals');
+		// Flex with a zero minimum follows host resizing when the native bars
+		// hide/show. Safe-area padding belongs to the host, outside the iframe.
+		frame.style.cssText = 'display:block;flex:1 1 0;width:100%;height:100%;min-height:0;min-width:0;border:0;background:#fff';
+		state.frame = frame;
+		app.appendChild(frame);
+
+		let ready = false;
+		let fallbackTimer;
+		let readerMode = false;
+		let readerModeQueue = Promise.resolve();
+		function setReaderMode(enabled) {
+			const operation = readerModeQueue.then(async () => {
+				if (readerMode === enabled) return;
+				const appearance = buildfire.appearance;
+				const method = enabled ? 'hide' : 'show';
+				// BuildFire names the app footer "navbar".
+				// Track partial failures so leaving the reader still shows both bars.
+				readerMode = null;
+				const results = await Promise.allSettled(['titlebar', 'navbar'].map((name) =>
+					new Promise((resolve, reject) => {
+						const bar = appearance && appearance[name];
+						if (!bar || typeof bar[method] !== 'function') {
+							return reject(new Error('BuildFire appearance.' + name + '.' + method + ' is unavailable.'));
+						}
+						bar[method](null, (error) => {
+							if (error) return reject(new Error(String(error)));
+							resolve();
+						});
+					})
+				));
+				const failure = results.find((result) => result.status === 'rejected');
+				if (failure) throw failure.reason;
+				readerMode = enabled;
+			});
+			readerModeQueue = operation.catch(() => {});
+			return operation;
+		}
+		const onMessage = async (event) => {
+			if (event.source !== frame.contentWindow) return;
+			const message = event.data || {};
+			if (message.source !== 'guides-shell') return;
+			if (message.type === 'ready') {
+				ready = true;
+				state.shellReady = true;
+				clearTimeout(fallbackTimer);
+				sendFrame(frame, { type: 'init', data: bootstrapData(state) });
+				state.pendingDeepLink = null;
+				return;
+			}
+			if (message.type === 'error') {
+				console.error('Uploaded guide shell error:', message.message);
+				return;
+			}
+			if (message.type !== 'request') return;
+			try {
+				let result = null;
+				if (message.action === 'setGuideCompleted') {
+					const slug = String(message.payload && message.payload.slug || '');
+					if (!state.lessons.some((lesson) => lesson.slug === slug)) throw new Error('Unknown guide ID.');
+					await setCompletion(state, 'guide', slug, message.payload.completed !== false);
+					result = bootstrapData(state).progress;
+				} else if (message.action === 'setQuizCompleted') {
+					const id = String(message.payload && message.payload.id || '').trim();
+					if (!Contract.stableId(id) || !state.quizzes.some((quiz) => quiz.id === id)) throw new Error('Unknown quiz ID.');
+					await setCompletion(state, 'quiz', id, message.payload.completed !== false);
+					result = bootstrapData(state).progress;
+				} else if (message.action === 'setBirthdate') {
+					const value = String(message.payload && message.payload.value || '');
+					if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Birthdate must use YYYY-MM-DD.');
+					if (value && new Date(value + 'T00:00:00') > new Date()) throw new Error('Birthdate cannot be in the future.');
+					state.preferences.babyBirthdate = value || null;
+					saveLocalPreferences(state);
+					result = bootstrapData(state).profile;
+				} else if (message.action === 'savePreference') {
+					const key = String(message.payload && message.payload.key || '').trim();
+					if (!/^[a-zA-Z0-9._-]{1,80}$/.test(key)) throw new Error('Invalid preference key.');
+					state.preferences[key] = clone(message.payload.value);
+					if (key === 'quizScores' && state.currentUser && typeof state.mutateProgress === 'function') {
+						const saved = await state.mutateProgress((latest) => ({
+							...latest,
+							quizScores: Contract.normalizeQuizScores(message.payload.value)
+						}));
+						state.progressData = saved;
+						state.preferences.quizScores = clone(saved.quizScores);
+					} else {
+						saveLocalPreferences(state);
+					}
+					result = clone(state.preferences);
+				} else if (message.action === 'setReaderMode') {
+					if (!message.payload || typeof message.payload.enabled !== 'boolean') throw new Error('Reader mode must be a boolean.');
+					await setReaderMode(message.payload.enabled);
+				} else if (message.action === 'goBack') {
+					await setReaderMode(false);
+					navigateAppHome();
+				} else if (message.action === 'openUrl') {
+					openUrl(message.payload && message.payload.url);
+				} else if (message.action === 'openActionItem') {
+					const action = message.payload && message.payload.action;
+					if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('Invalid action item.');
+					const internalGuideId = guideIdFromActionItem(action);
+					if (internalGuideId) {
+						receiveDeepLink({ type: 'guide', guideId: internalGuideId });
+					} else if (!buildfire.actionItems || typeof buildfire.actionItems.execute !== 'function') {
+						throw new Error('Action items are unavailable.');
+					} else {
+						buildfire.actionItems.execute(action, () => { });
+					}
+				} else if (message.action === 'openPaywall') {
+					if (!buildfire.navigation || typeof buildfire.navigation.navigateTo !== 'function') {
+						throw new Error('Subscription screen is unavailable.');
+					}
+					const context = buildfire.getContext && buildfire.getContext() || {};
+					buildfire.navigation.navigateTo({
+						pluginId: 'ccd96f38-4fe8-4751-b0dd-d7320f43a417',
+						queryString: context.instanceId ? 'instanceId=' + encodeURIComponent(context.instanceId) : ''
+					});
+				} else {
+					throw new Error('Unsupported GuidesAPI action: ' + message.action);
+				}
+				sendFrame(frame, { type: 'response', id: message.id, data: result });
+			} catch (error) {
+				sendFrame(frame, { type: 'response', id: message.id, error: error.message || String(error) });
+			}
+		};
+		window.addEventListener('message', onMessage);
+		frame.srcdoc = injectShellBridge(html);
+		if (buildfire.navigation) {
+			buildfire.navigation.onBackButtonClick = () => sendFrame(frame, { type: 'back' });
+		}
+		fallbackTimer = setTimeout(() => {
+			if (!ready) {
+				window.removeEventListener('message', onMessage);
+				app.classList.remove('contract-shell');
+				console.error('Uploaded guide shell did not complete the contract handshake; using the built-in renderer.');
+				renderBuiltIn(app, state, 'The uploaded design could not start, so a safe fallback is shown.');
+			}
+		}, 5000);
+	}
+
+	function renderLegacy(html) {
+		const bootstrap = '<script>(function(){if(typeof buildfire!=="undefined"&&buildfire._postMessageHandler){window.removeEventListener("message",buildfire._postMessageHandler,false);window.addEventListener("message",buildfire._postMessageHandler,false);}}());<\/script>';
+		const hydrated = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (head) => head + bootstrap) : bootstrap + html;
+		document.open();
+		document.write(hydrated);
+		document.close();
+	}
+
+	function renderBuiltIn(app, state, notice) {
+		const published = state.lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false);
+		const byId = new Map(published.map((lesson) => [lesson.slug, lesson]));
+		const configured = state.activeJourney && Array.isArray(state.activeJourney.sections) ? state.activeJourney.sections : [];
+		const seen = new Set();
+		const sections = configured.map((section) => {
+			const lessons = (section.lessonIds || []).map((id) => byId.get(id)).filter(Boolean);
+			lessons.forEach((lesson) => seen.add(lesson.slug));
+			return { ...section, lessons };
+		});
+		const remaining = published.filter((lesson) => !seen.has(lesson.slug));
+		if (remaining.length) sections.push({ id: 'library', title: sections.length ? 'More guides' : 'All guides', lessons: remaining });
+		let activeScreen = 'home';
+
+		function home() {
+			activeScreen = 'home';
+			const completedCount = published.filter((lesson) => state.completed.has(lesson.slug)).length;
+			app.innerHTML = (notice ? '<div style="padding:10px 14px;background:#fff4d6;color:#704f00;font:13px sans-serif">' + escapeHtml(notice) + '</div>' : '') +
                 '<section><header class="home-header"><div class="home-header-inner"><div class="eyebrow">Your journey</div><h1>' +
-                escapeHtml(state.activeJourney && state.activeJourney.title || "Interactive guides") + '</h1><p>' +
-                escapeHtml(state.activeJourney && state.activeJourney.description || "Explore all available guides.") + '</p></div></header><div class="content">' +
+                escapeHtml(state.activeJourney && state.activeJourney.title || 'Interactive guides') + '</h1><p>' +
+                escapeHtml(state.activeJourney && state.activeJourney.description || 'Explore all available guides.') + '</p></div></header><div class="content">' +
                 '<div class="progress-card"><div class="progress-row"><span>Journey progress</span><span>' + completedCount + ' of ' + published.length +
                 '</span></div><div class="progress-track"><div class="progress-fill" style="width:' + (published.length ? Math.round(completedCount / published.length * 100) : 0) + '%"></div></div></div>' +
                 sections.map((section) => '<section class="journey-section"><div class="section-title"><span class="section-icon">•</span><span class="section-heading"><span>' + escapeHtml(section.title || section.id) + '</span></span></div><div class="lesson-list">' +
                     section.lessons.map((lesson) => '<button class="lesson' + (state.completed.has(lesson.slug) ? ' done' : '') + '" data-lesson-id="' + escapeHtml(lesson.slug) + '"><span class="lesson-mark">' + (state.completed.has(lesson.slug) ? '✓' : '•') + '</span><span class="lesson-copy"><strong>' + escapeHtml(lesson.title) + '</strong><span>' + escapeHtml(lesson.readTime || '') + '</span></span><span class="lesson-arrow">›</span></button>').join('') + '</div></section>').join('') + '</div></section>';
-            app.querySelectorAll("[data-lesson-id]").forEach((button) => button.addEventListener("click", () => reader(button.dataset.lessonId)));
-        }
+			app.querySelectorAll('[data-lesson-id]').forEach((button) => button.addEventListener('click', () => reader(button.dataset.lessonId)));
+		}
 
-        function reader(slug) {
-            const lesson = byId.get(slug);
-            if (!lesson) return home();
-            activeScreen = "reader";
-            app.innerHTML = '<article class="reader"><nav class="reader-nav"><button class="back" id="runtime-back">‹</button><strong>' + escapeHtml(lesson.title) + '</strong></nav><main class="reader-main"><div class="reader-meta">' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(" · ")) + '</div><h1>' + escapeHtml(lesson.title) + '</h1><div class="rich-text" id="runtime-content">' + (lesson.bodyHtml || '') + '</div><button class="complete' + (state.completed.has(slug) ? ' done' : '') + '" id="runtime-complete">' + (state.completed.has(slug) ? '✓ Completed' : 'Mark as completed') + '</button></main></article>';
-            document.getElementById("runtime-back").addEventListener("click", home);
-            document.getElementById("runtime-complete").addEventListener("click", async () => {
-                state.completed.has(slug) ? state.completed.delete(slug) : state.completed.add(slug);
-                await saveProgress(state).catch(console.error);
-                reader(slug);
-            });
-            prepareGuideContent(document.getElementById("runtime-content"));
-        }
-        state.openGuide = reader;
+		function reader(slug, anchor) {
+			const lesson = byId.get(slug);
+			if (!lesson) return home();
+			activeScreen = 'reader';
+			app.innerHTML = '<article class="reader"><nav class="reader-nav"><button class="back" id="runtime-back">‹</button><strong>' + escapeHtml(lesson.title) + '</strong></nav><main class="reader-main"><div class="reader-meta">' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(' · ')) + '</div><h1>' + escapeHtml(lesson.title) + '</h1><div class="rich-text" id="runtime-content">' + (lesson.bodyHtml || '') + '</div><button class="complete' + (state.completed.has(slug) ? ' done' : '') + '" id="runtime-complete">' + (state.completed.has(slug) ? '✓ Completed' : 'Mark as completed') + '</button></main></article>';
+			document.getElementById('runtime-back').addEventListener('click', home);
+			document.getElementById('runtime-complete').addEventListener('click', async () => {
+				await setCompletion(state, 'guide', slug, !state.completed.has(slug)).catch(console.error);
+				reader(slug);
+			});
+			prepareGuideContent(document.getElementById('runtime-content'));
+			if (anchor) requestAnimationFrame(() => {
+				const content = document.getElementById('runtime-content');
+				const target = document.getElementById(anchor);
+				if (content && target && content.contains(target)) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			});
+		}
+		state.openGuide = reader;
 
-        if (buildfire.navigation) {
-            buildfire.navigation.onBackButtonClick = () => {
-                if (activeScreen === "reader") home();
-                else navigateAppHome();
-            };
-        }
+		if (buildfire.navigation) {
+			buildfire.navigation.onBackButtonClick = () => {
+				if (activeScreen === 'reader') home();
+				else navigateAppHome();
+			};
+		}
 
-        if (!published.length) {
-            app.innerHTML = '<section class="state"><h1>No guides published</h1><p>Add and publish guides from the Content section.</p></section>';
-        } else {
-            home();
-            if (state.pendingDeepLink && state.pendingDeepLink.type === "guide") {
-                const guideId = state.pendingDeepLink.guideId;
-                state.pendingDeepLink = null;
-                reader(guideId);
-            }
-        }
-    }
+		if (!published.length) {
+			app.innerHTML = '<section class="state"><h1>No guides published</h1><p>Add and publish guides from the Content section.</p></section>';
+		} else {
+			home();
+			if (state.pendingDeepLink && state.pendingDeepLink.type === 'guide') {
+				const guideId = state.pendingDeepLink.guideId;
+				const anchor = state.pendingDeepLink.anchor;
+				state.pendingDeepLink = null;
+				reader(guideId, anchor);
+			}
+		}
+	}
 
-    async function findActiveShell(releaseState) {
-        if (!releaseState || !releaseState.activeReleaseId) return null;
-        const revisions = await searchAll(TAGS.shells);
-        return revisions.find((revision) => revision && revision.releaseId === releaseState.activeReleaseId) || null;
-    }
+	async function findActiveShell(releaseState) {
+		if (!releaseState || !releaseState.activeReleaseId) return null;
+		const revisions = await searchAll(TAGS.shells);
+		return revisions.find((revision) => revision && revision.releaseId === releaseState.activeReleaseId) || null;
+	}
 
-    async function run() {
-        const app = document.getElementById("app");
-        const state = createState();
-        runtimeState = state;
-        try {
-            const [lessons, quizzes, journeyData, releaseState, legacyHtml] = await Promise.all([
-                searchAll(TAGS.lessons),
-                searchAll(TAGS.quizzes),
-                getData(TAGS.journeys),
-                getData(TAGS.releaseState),
-                getData(TAGS.legacyHtml),
-                loadProgress(state)
-            ]);
-            state.lessons = lessons;
-            state.quizzes = quizzes;
-            state.entitlements = await loadEntitlements(state.currentUser).catch((error) => {
-                console.error("Unable to resolve guide subscriptions", error);
-                return { hasSubscriptions: false, subscriptions: [] };
-            });
-            state.journeyData = journeyData || { journeys: [] };
-            const publishedJourneys = (state.journeyData.journeys || []).filter((journey) => journey.published !== false);
-            state.activeJourney = publishedJourneys.find((journey) => journey.id === state.journeyData.defaultJourneyId) || publishedJourneys[0] || null;
-            const activeShell = await findActiveShell(releaseState);
-            state.activeRelease = activeShell;
-            if (activeShell && typeof activeShell.html === "string" && shellContract(activeShell.html) >= 1) {
-                renderContractShell(app, activeShell.html, state);
-            } else if (activeShell && typeof activeShell.html === "string") {
-                renderLegacy(activeShell.html);
-            } else if (legacyHtml && typeof legacyHtml.html === "string" && legacyHtml.html.trim()) {
-                renderLegacy(legacyHtml.html);
-            } else {
-                renderBuiltIn(app, state);
-            }
-        } catch (error) {
-            console.error("Unable to start guide release runtime", error);
-            app.innerHTML = '<section class="state"><h1>Guides unavailable</h1><p>The content could not be loaded. Please try again.</p></section>';
-        }
-    }
+	async function run() {
+		const app = document.getElementById('app');
+		const state = createState();
+		runtimeState = state;
+		try {
+			const [lessons, quizzes, journeyData, releaseState, legacyHtml] = await Promise.all([
+				searchAll(TAGS.lessons),
+				searchAll(TAGS.quizzes),
+				getData(TAGS.journeys),
+				getData(TAGS.releaseState),
+				getData(TAGS.legacyHtml),
+				loadProgress(state).catch((error) => useLocalProgressFallback(state, error))
+			]);
+			state.lessons = lessons;
+			state.quizzes = quizzes;
+			state.entitlements = await loadEntitlements(state.currentUser).catch((error) => {
+				console.error('Unable to resolve guide subscriptions', error);
+				return { hasSubscriptions: false, subscriptions: [] };
+			});
+			state.journeyData = journeyData || { journeys: [] };
+			const publishedJourneys = (state.journeyData.journeys || []).filter((journey) => journey.published !== false);
+			state.activeJourney = publishedJourneys.find((journey) => journey.id === state.journeyData.defaultJourneyId) || publishedJourneys[0] || null;
+			const activeShell = await findActiveShell(releaseState);
+			state.activeRelease = activeShell;
+			if (activeShell && typeof activeShell.html === 'string' && shellContract(activeShell.html) >= 1) {
+				renderContractShell(app, activeShell.html, state);
+			} else if (activeShell && typeof activeShell.html === 'string') {
+				renderLegacy(activeShell.html);
+			} else if (legacyHtml && typeof legacyHtml.html === 'string' && legacyHtml.html.trim()) {
+				renderLegacy(legacyHtml.html);
+			} else {
+				renderBuiltIn(app, state);
+			}
+		} catch (error) {
+			console.error('Unable to start guide release runtime', error);
+			app.innerHTML = '<section class="state"><h1>Guides unavailable</h1><p>The content could not be loaded. Please try again.</p></section>';
+		}
+	}
 
-    global.GuidesReleaseRuntime = {
-        start() {
-            if (started) return true;
-            started = true;
-            listenForDeepLinks();
-            run();
-            if (buildfire.datastore && typeof buildfire.datastore.onUpdate === "function") {
-                buildfire.datastore.onUpdate(() => window.location.reload());
-            }
-            if (buildfire.auth) {
-                if (typeof buildfire.auth.onLogin === "function") buildfire.auth.onLogin(() => window.location.reload());
-                if (typeof buildfire.auth.onLogout === "function") buildfire.auth.onLogout(() => window.location.reload());
-            }
-            return true;
-        }
-    };
+	global.GuidesReleaseRuntime = {
+		start() {
+			if (started) return true;
+			started = true;
+			listenForDeepLinks();
+			run();
+			if (buildfire.datastore && typeof buildfire.datastore.onUpdate === 'function') {
+				buildfire.datastore.onUpdate(() => window.location.reload());
+			}
+			if (buildfire.auth) {
+				if (typeof buildfire.auth.onLogin === 'function') buildfire.auth.onLogin(() => {
+					if (runtimeState) {
+						runtimeState.completed.clear();
+						runtimeState.completedQuizzes.clear();
+						runtimeState.progressData = {};
+					}
+					window.location.reload();
+				});
+				if (typeof buildfire.auth.onLogout === 'function') buildfire.auth.onLogout(() => {
+					if (runtimeState) {
+						runtimeState.currentUser = null;
+						runtimeState.userId = null;
+						runtimeState.completed = new Set(loadLocalArray(LOCAL_PROGRESS_PREFIX + ':anonymous'));
+						runtimeState.completedQuizzes = new Set(loadLocalArray(LEGACY_LOCAL_PREFIXES.completedQuizzes + ':anonymous'));
+						runtimeState.progressData = {};
+					}
+					window.location.reload();
+				});
+			}
+			return true;
+		}
+	};
 }(window));
