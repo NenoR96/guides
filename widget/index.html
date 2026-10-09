@@ -251,6 +251,7 @@
         </section>
     </main>
 
+    <script src="progress-store.js"></script>
     <script src="release-runtime.js"></script>
     <script>
         (function () {
@@ -265,8 +266,6 @@
             const LESSON_TAG = "guideLessons";
             const JOURNEY_TAG = "guideJourneys";
             const LEGACY_TAG = "interactiveGuideHtml";
-            const LEGACY_PROGRESS_TAG = "reading-progress";
-            const LOCAL_PROGRESS_PREFIX = "guides:readGuides";
             const PAGE_SIZE = 50;
             const app = document.getElementById("app");
             const state = {
@@ -276,10 +275,8 @@
                 journey: null,
                 completed: new Set(),
                 progressData: {},
-                progressTag: null,
-                progressQueue: Promise.resolve(),
                 currentUser: null,
-                localProgressKey: LOCAL_PROGRESS_PREFIX + ":anonymous",
+                progressSession: null,
                 activeScreen: "home"
             };
 
@@ -375,81 +372,34 @@
                 return records.map((record) => record && record.data ? record.data : record);
             }
 
-            function getCurrentUser() {
-                return new Promise((resolve) => {
-                    if (!buildfire.auth || typeof buildfire.auth.getCurrentUser !== "function") return resolve(null);
-                    buildfire.auth.getCurrentUser((error, user) => resolve(error ? null : (user || null)));
-                });
-            }
-
-            function progressOwnerKey(user) {
-                const id = user && (user._id || user.id || user.userId || user.email);
-                return id ? "user:" + encodeURIComponent(String(id)) : "anonymous";
-            }
-
-            async function loadProgress() {
-                const user = await getCurrentUser();
-                state.currentUser = user;
-                state.localProgressKey = LOCAL_PROGRESS_PREFIX + ":anonymous";
-                let anonymousIds = [];
-                try { anonymousIds = GuidesHomeContract.normalizeIds(JSON.parse(localStorage.getItem(state.localProgressKey) || "[]")); }
-                catch (error) { /* Ignore malformed anonymous cache. */ }
-                if (!user) {
-                    state.completed = new Set(anonymousIds);
-                    return;
-                }
-                const context = buildfire.getContext && buildfire.getContext() || {};
-                const instanceId = String(context.instanceId || context.pluginInstanceId || "").trim();
-                const userId = String(user._id || "").trim();
-                state.progressTag = GuidesHomeContract.progressTag(instanceId, userId);
-                if (!state.progressTag) throw new Error("Authenticated progress requires instanceId and the user's stable _id.");
-                const getAppProgress = () => new Promise((resolve, reject) => buildfire.appData.get(state.progressTag,
-                    (error, result) => error ? reject(error) : resolve(result && result.data || null)));
-                const getLegacy = () => new Promise((resolve) => buildfire.userData.get(LEGACY_PROGRESS_TAG,
-                    (error, result) => resolve(error ? null : (result && result.data || null))));
-                const [raw, legacy] = await Promise.all([getAppProgress(), getLegacy()]);
-                let progress = !GuidesHomeContract.isEmptyRecord(raw) ? GuidesHomeContract.normalizeProgress(raw, instanceId, userId)
-                    : GuidesHomeContract.blankProgress(instanceId, userId);
-                if (!progress) throw new Error("The progress document does not match the current instance and user.");
-                if (progress.migrationVersion < 1) {
-                    progress = GuidesHomeContract.mergeCompletion(progress, GuidesHomeContract.legacyCompletion(legacy));
-                    progress.migrationVersion = 1;
-                    progress.migratedFromUserDataAt = new Date().toISOString();
-                }
-                progress = GuidesHomeContract.mergeCompletion(progress, { readGuideIds: anonymousIds });
-                if (GuidesHomeContract.isEmptyRecord(raw) || progress.migrationVersion !== raw.migrationVersion ||
-                    JSON.stringify(progress.readGuideIds) !== JSON.stringify(raw.readGuideIds || [])) {
-                    progress.revision = Math.max(0, Number(progress.revision) || 0) + 1;
-                    progress.updatedAt = new Date().toISOString();
-                    await new Promise((resolve, reject) => buildfire.appData.save(progress, state.progressTag,
-                        (error) => error ? reject(error) : resolve()));
-                }
+            function applyProgress(progress) {
                 state.progressData = progress;
                 state.completed = new Set(progress.readGuideIds);
             }
 
-            function saveProgress() {
-                const readLessons = Array.from(state.completed);
-                if (!state.currentUser) {
-                    localStorage.setItem(state.localProgressKey, JSON.stringify(readLessons));
-                    return Promise.resolve();
-                }
-                const operation = state.progressQueue.then(async () => {
-                    const raw = await new Promise((resolve, reject) => buildfire.appData.get(state.progressTag,
-                        (error, result) => error ? reject(error) : resolve(result && result.data || null)));
-                    const latest = GuidesHomeContract.normalizeProgress(raw,
-                        state.progressData.sourceInstanceId, state.progressData.userId);
-                    if (!latest) throw new Error("The progress document does not match the current instance and user.");
-                    latest.readGuideIds = GuidesHomeContract.normalizeIds(readLessons);
-                    latest.revision += 1;
-                    latest.updatedAt = new Date().toISOString();
-                    await new Promise((resolve, reject) => buildfire.appData.save(latest, state.progressTag,
-                        (error) => error ? reject(error) : resolve()));
-                    state.progressData = latest;
-                });
-                state.progressQueue = operation.catch(() => {});
-                return operation;
+            async function loadProgress() {
+                state.progressSession = await window.GuidesProgressStore.open();
+                state.currentUser = state.progressSession.user;
+                applyProgress(state.progressSession.snapshot());
+                applyProgress(await state.progressSession.sync());
             }
+
+            async function saveProgress(slug, completed) {
+                if (!state.progressSession) throw new Error("Guides progress identity is unavailable. Please reload.");
+                try { applyProgress(await state.progressSession.set('guide', slug, completed)); }
+                catch (error) {
+                    if (state.progressSession.active) applyProgress(state.progressSession.snapshot());
+                    console.error("Unable to sync Guides progress; pending changes retained", error);
+                }
+            }
+
+            async function retryProgress() {
+                if (!state.progressSession) return;
+                try { applyProgress(await state.progressSession.sync()); }
+                catch (error) { console.error("Unable to retry Guides progress", error); }
+            }
+            window.addEventListener('online', retryProgress);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) retryProgress(); });
 
             function deriveSections() {
                 const configured = state.journey && Array.isArray(state.journey.sections) ? state.journey.sections : [];
@@ -542,7 +492,7 @@
                 document.getElementById("toggle-complete").addEventListener("click", () => {
                     if (state.completed.has(slug)) state.completed.delete(slug);
                     else state.completed.add(slug);
-                    saveProgress().catch((error) => console.error("Unable to save guide progress", error));
+                    saveProgress(slug, state.completed.has(slug)).catch((error) => console.error("Unable to save guide progress", error));
                     renderReader(slug);
                 });
                 prepareGuideContent(document.getElementById("lesson-content"));
@@ -589,8 +539,7 @@
                         getData(JOURNEY_TAG),
                         loadProgress().catch((error) => {
                             console.error("Unable to load guide progress; continuing without saved progress", error);
-                            state.currentUser = null;
-                            state.progressData = {};
+                            if (state.progressSession) applyProgress(state.progressSession.snapshot());
                         })
                     ]);
                     state.lessons = lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false);
@@ -617,10 +566,10 @@
                     else if (typeof buildfire.navigation.navigateHome === "function") buildfire.navigation.navigateHome();
                 };
             }
-            buildfire.datastore.onUpdate(() => window.location.reload());
+            buildfire.datastore.onUpdate(() => { state.progressSession?.invalidate(); window.location.reload(); });
             if (buildfire.auth) {
-                if (typeof buildfire.auth.onLogin === "function") buildfire.auth.onLogin(() => window.location.reload());
-                if (typeof buildfire.auth.onLogout === "function") buildfire.auth.onLogout(() => window.location.reload());
+                if (typeof buildfire.auth.onLogin === "function") buildfire.auth.onLogin(() => { state.progressSession?.invalidate(); window.location.reload(); });
+                if (typeof buildfire.auth.onLogout === "function") buildfire.auth.onLogout(() => { state.progressSession?.invalidate(); window.location.reload(); });
             }
         }());
     </script>

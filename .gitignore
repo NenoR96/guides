@@ -1,2 +1,4 @@
 guides.zip
 htmls
+node_modules/
+dist/

@@ -79,7 +79,11 @@ IDs are trimmed, validated against the stable-ID format, and deduplicated. Loade
 
 Birthdate, scroll positions, collapsed sections, and view preferences stay in device-local plugin storage. Subscription and profile data are never part of shared progress. Guides no longer writes guide or quiz completion to `userData`.
 
-Anonymous users use the existing device-local guide and quiz completion keys. On login, valid anonymous completion is unioned into the authenticated appData record without removing remote completion. On logout, authenticated in-memory state is cleared and the widget reloads its anonymous device state.
+Both widget implementations use `widget/progress-store.js`. Device-local progress uses version-two keys containing the Guides instance and stable user ID (or a guest identity). Authenticated failures never write guest data. Completion, uncompletion, and quiz-score changes are retained as pending operations, replayed against the latest server record on startup, the next change, an online event, or return to the foreground. Only successfully saved operations are acknowledged; account identity is checked before reads and writes, and login/logout invalidates the old session.
+
+New guest history is isolated by Guides instance. On login it is durably claimed by that account before upload, retained for that account on failure, and removed from guest storage after successful upload. Another account cannot import an outstanding claim. Old `guides:readGuides:anonymous` and `guides:completedQuizzes:anonymous` keys are left untouched and ignored because previous versions mixed guest activity with failed authenticated saves. Already-contaminated remote history cannot be automatically attributed or repaired.
+
+If authentication or instance identity cannot be established, progress writes are unavailable until reload; a failed authentication request is never treated as a guest login. Local storage must be available to durably queue changes. Serialization is per widget session, not a server-side transaction across devices.
 
 ## Legacy migration
 
