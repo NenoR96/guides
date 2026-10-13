@@ -1026,6 +1026,7 @@
             <button class="guides-cms-tab active" type="button" data-panel="lessons-panel">Guides</button>
             <button class="guides-cms-tab" type="button" data-panel="quizzes-panel">Quizzes</button>
             <button class="guides-cms-tab" type="button" data-panel="journeys-panel">Organization</button>
+            <button class="guides-cms-tab" type="button" data-panel="translations-panel">Translation</button>
             <button class="guides-cms-tab" type="button" data-panel="html-panel">HTML</button>
         </div>
 
@@ -1386,6 +1387,19 @@
             </div>
         </section>
 
+        <section class="guides-cms-panel" id="translations-panel">
+            <div class="card">
+                <div class="card-header"><h2>Quiz translations</h2></div>
+                <p class="description">Edit shared quiz messages. Leave a field empty to keep the current shell text. Keep {count} in messages that include a number. Saved changes apply to all quizzes.</p>
+                <form id="translations-form">
+                    <fieldset id="translations-fields" disabled style="border:0;padding:0;margin:0"></fieldset>
+                    <div class="actions">
+                        <button class="btn primary" id="translations-save" type="submit" disabled>Save translations</button>
+                    </div>
+                    <p id="translations-status" role="status" aria-live="polite"></p>
+                </form>
+            </div>
+        </section>
         <section class="guides-cms-panel" id="html-panel">
             <section class="card">
                 <div class="card-header">
@@ -4390,6 +4404,8 @@
         }());
     </script>
     <script src="release-manager.js"></script>
+    <script src="../../shared/guides-translations.js"></script>
+    <script src="translations.js"></script>
 </body>
 
 </html>

@@ -13,6 +13,8 @@ const pages = [
 const scripts = [
   "shared/guides-home-contract",
   "shared/guides-catalog-sync",
+  "shared/guides-translations",
+  "control/content/translations",
   "control/content/migrate-existing-content",
   "control/content/release-manager",
   "widget/guides-home-contract",

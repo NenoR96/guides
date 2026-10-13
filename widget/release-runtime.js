@@ -667,7 +667,10 @@
 			state.journeyData = journeyData || { journeys: [] };
 			const publishedJourneys = (state.journeyData.journeys || []).filter((journey) => journey.published !== false);
 			state.activeJourney = publishedJourneys.find((journey) => journey.id === state.journeyData.defaultJourneyId) || publishedJourneys[0] || null;
-			const activeShell = await findActiveShell(releaseState);
+			const translations = await getData(global.GuidesTranslations.tag);
+            const activeShell = await findActiveShell(releaseState);
+            if (activeShell && typeof activeShell.html === 'string') activeShell.html = global.GuidesTranslations.apply(activeShell.html, translations);
+            if (legacyHtml && typeof legacyHtml.html === 'string') legacyHtml.html = global.GuidesTranslations.apply(legacyHtml.html, translations);
 			state.activeRelease = activeShell;
 			if (activeShell && typeof activeShell.html === 'string' && shellContract(activeShell.html) >= 1) {
 				renderContractShell(app, activeShell.html, state);
