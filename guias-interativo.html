@@ -18,7 +18,30 @@ Rules:
 10. journeyData is a complete replacement when supplied, not a partial merge. Preserve every existing journey, section, category, age array, milestone, and guide reference unless the requested change explicitly modifies it. Never submit a partial journeyData object.
 11. Keep all reference IDs valid. Quiz afterGuideId, sourceGuideId, and alsoAfterGuideIds must reference published guides. Do not duplicate a guide within or across categories or curriculum sections.
 12. Before returning the file, verify that #guides-content is valid JSON, all existing IDs are unchanged, every new published guide is categorized and placed, organization arrays contain no accidental duplicates, and unrelated content remains unchanged.
+13. Translate generated reader and navigation labels in #guides-ui-labels. Preserve that block and the data-driven renderer when combining country content with a newer shell. Static page copy is edited in the HTML; guide and organization text belongs in #guides-content.
+14. An archived ID must not also appear in lessons[] or quizzes[] in the same upload. Remove the archived record from the upload array and keep its ID in the corresponding archive list.
 END GUIDES AI INSTRUCTIONS -->
+<script id="guides-ui-labels" type="application/json">
+{
+  "inThisGuide": "Neste guia",
+  "otherGuides": "Outros guias",
+  "moreContent": "Mais conteúdos",
+  "references": "Referências",
+  "alreadyRead": "✓ Já lido!",
+  "markRead": "✓ Marcar como lido",
+  "alreadyCompleted": "✓ Já concluído!",
+  "markCompleted": "✓ Marcar como concluído",
+  "start": "Começar",
+  "progressOf": "de",
+  "questions": "perguntas",
+  "startQuiz": "Bora começar",
+  "finishListTitle": "Seu bebê já passou dos 2 anos?",
+  "finishTitle": "Parabéns, você chegou na última etapa!",
+  "finishListText": "A jornada da alimentação continua no Garfinho, nosso app para crianças a partir de 2 anos.",
+  "finishText": "Agora é hora de continuar a jornada da alimentação no Garfinho, nosso app para crianças a partir de 2 anos.",
+  "finishButtonLabel": "Conhecer o Garfinho →"
+}
+</script>
 <script id="guides-release-manifest" type="application/json">
 {
   "schemaVersion": 1,
@@ -6307,7 +6330,7 @@ END GUIDES AI INSTRUCTIONS -->
   "archivedQuizIds": []
 }
 </script>
-<script id="guides-working-preview-bootstrap">(function(){if(window.GuidesAPI)return;function data(){var node=document.getElementById('guides-content');var content=JSON.parse(node&&node.textContent||'{"lessons":[]}');var journeys=content.journeyData&&content.journeyData.journeys||[];var active=journeys.find(function(j){return j.id===(content.journeyData&&content.journeyData.defaultJourneyId);})||journeys[0]||null;return {runtime:{version:1,shellContractVersion:1,preview:true},lessons:(content.lessons||[]).filter(function(g){return g.published!==false;}),quizzes:content.quizzes||[],journeyData:content.journeyData||{journeys:[]},activeJourney:active,progress:{readGuideIds:[],completedQuizIds:[],collapsedJourneySections:[],readerScrollPositions:{}},profile:{babyBirthdate:null},preferences:{},currentUser:{id:'preview-user',displayName:'Preview User',firstName:'Preview'},entitlements:{hasSubscriptions:true,subscriptions:[]}};}var value=data();window.GuidesAPI={version:1,getInitialData:function(){return Promise.resolve(value);},setGuideCompleted:function(slug,completed){var ids=new Set(value.progress.readGuideIds||[]);completed===false?ids.delete(slug):ids.add(slug);value.progress.readGuideIds=Array.from(ids);return Promise.resolve(value.progress);},setQuizCompleted:function(id,completed){var ids=new Set(value.progress.completedQuizIds||[]);completed===false?ids.delete(id):ids.add(id);value.progress.completedQuizIds=Array.from(ids);return Promise.resolve(value.progress);},setBirthdate:function(item){value.profile.babyBirthdate=item||null;return Promise.resolve(value.profile);},savePreference:function(key,item){value.preferences[key]=item;return Promise.resolve(value.preferences);},setReaderMode:function(){return Promise.resolve();},goBack:function(){return Promise.resolve();},openUrl:function(url){window.open(url,'_blank','noopener');return Promise.resolve();},openActionItem:function(){return Promise.resolve();},openPaywall:function(){return Promise.resolve();},subscribe:function(){},onBack:function(){}};}());</script>
+<script id="guides-working-preview-bootstrap">(function(){if(window.GuidesAPI)return;function data(){var node=document.getElementById('guides-content');var content=JSON.parse(node&&node.textContent||'{"lessons":[]}');var journeys=(content.journeyData&&content.journeyData.journeys||[]).filter(function(j){return j.published!==false;});var active=journeys.find(function(j){return j.id===(content.journeyData&&content.journeyData.defaultJourneyId);})||journeys[0]||null;return {runtime:{version:1,shellContractVersion:1,preview:true},lessons:(content.lessons||[]).filter(function(g){return g.published!==false&&(content.archivedLessonIds||[]).indexOf(g.slug)===-1;}),quizzes:(content.quizzes||[]).filter(function(q){return q.published!==false&&(content.archivedQuizIds||[]).indexOf(q.id)===-1;}),journeyData:content.journeyData||{journeys:[]},activeJourney:active,progress:{readGuideIds:[],completedQuizIds:[],collapsedJourneySections:[],readerScrollPositions:{}},profile:{babyBirthdate:null},preferences:{},currentUser:{id:'preview-user',displayName:'Preview User',firstName:'Preview'},entitlements:{hasSubscriptions:true,subscriptions:[]}};}var value=data();window.GuidesAPI={version:1,getInitialData:function(){return Promise.resolve(value);},setGuideCompleted:function(slug,completed){var ids=new Set(value.progress.readGuideIds||[]);completed===false?ids.delete(slug):ids.add(slug);value.progress.readGuideIds=Array.from(ids);return Promise.resolve(value.progress);},setQuizCompleted:function(id,completed){var ids=new Set(value.progress.completedQuizIds||[]);completed===false?ids.delete(id):ids.add(id);value.progress.completedQuizIds=Array.from(ids);return Promise.resolve(value.progress);},setBirthdate:function(item){value.profile.babyBirthdate=item||null;return Promise.resolve(value.profile);},savePreference:function(key,item){value.preferences[key]=item;return Promise.resolve(value.preferences);},setReaderMode:function(){return Promise.resolve();},goBack:function(){return Promise.resolve();},openUrl:function(url){window.open(url,'_blank','noopener');return Promise.resolve();},openActionItem:function(){return Promise.resolve();},openPaywall:function(){return Promise.resolve();},subscribe:function(){},onBack:function(){}};}());</script>
 
 
 
@@ -10239,7 +10262,7 @@ END GUIDES AI INSTRUCTIONS -->
       "atemporal-industrializado": "label-tag",
     };
     function guideIconId(guide) {
-      return (guide && GUIDE_ICON_MAP[guide.id]) || "leaf";
+      return (guide && (guide.icon || GUIDE_ICON_MAP[guide.id])) || "leaf";
     }
 
     // ─────────────────────────────────────────────
@@ -21980,6 +22003,10 @@ END GUIDES AI INSTRUCTIONS -->
     // as duas agora mostram a biblioteca completa organizada por tema — a
     // personalizada só acrescenta o destaque "Para o seu bebê agora" por cima.
     function collectAllLibraryGuides() {
+      if (contractJourneySections !== null) {
+        const fundamentals = new Set(FUNDAMENTALS.map(g => g.id));
+        return ALL_GUIDES_FLAT.filter(g => !fundamentals.has(g.id));
+      }
       const seen = new Set();
       const arr = [];
       FUNDAMENTALS.forEach(g => seen.add(g.id));
@@ -22130,7 +22157,8 @@ END GUIDES AI INSTRUCTIONS -->
       // conjunto reconhecível ("terminou a base") — por isso o selo continua,
       // agora com o nome da fase que os abriga.
       if (FUNDAMENTALS.find(f => f.id === guideId)) {
-        candidateGroups.push({ title: '0 a 5 meses', guides: FUNDAMENTALS });
+        const section = buildPhaseSections().find(s => s.guides.some(g => g.id === guideId));
+        candidateGroups.push({ title: section ? section.label : '', guides: FUNDAMENTALS });
       }
       if (phaseHighlightGuides.find(g => g.id === guideId)) {
         candidateGroups.push({ title: 'os guias da sua fase atual', guides: phaseHighlightGuides });
@@ -22588,7 +22616,7 @@ END GUIDES AI INSTRUCTIONS -->
       if (!content) {
         // Sem perguntas escritas ainda: cai na página de exemplo antiga.
         document.getElementById('quiz-play-title').textContent = quiz.title;
-        document.getElementById('quiz-play-questions').textContent = `${quiz.questions} perguntas`;
+        document.getElementById('quiz-play-questions').textContent = `${quiz.questions} ${guideLabel('questions', 'perguntas')}`;
         renderQuizPlayButton();
         setQuizStage('soon');
         showScreen('quiz-play');
@@ -22605,7 +22633,7 @@ END GUIDES AI INSTRUCTIONS -->
       const btn = document.getElementById('btn-mark-quiz-done');
       if (!btn || !currentQuizId) return;
       const done = completedQuizzes.has(currentQuizId);
-      btn.textContent = done ? '✓ Já concluído!' : '✓ Marcar como concluído';
+      btn.textContent = done ? guideLabel('alreadyCompleted', '✓ Já concluído!') : guideLabel('markCompleted', '✓ Marcar como concluído');
       btn.className = 'btn-read' + (done ? ' done' : '');
     }
 
@@ -22665,7 +22693,7 @@ END GUIDES AI INSTRUCTIONS -->
             : `Bater meu recorde (${best.hits} de ${best.total})`;
       } else {
         card.style.display = 'none';
-        btn.textContent = 'Bora começar';
+        btn.textContent = guideLabel('startQuiz', 'Bora começar');
       }
 
       // O atalho pro guia só aparece se o quiz aponta pra um guia de verdade.
@@ -22988,6 +23016,7 @@ END GUIDES AI INSTRUCTIONS -->
     // trilha (entender o método, decidir, preparar a cozinha). Toda fase
     // carrega `phaseKey`, que é o que faz aparecer o marco "o que esperar".
     function buildPhaseSections() {
+      if (contractJourneySections !== null) return contractJourneySections;
       const seen = new Set();
       const sections = [];
 
@@ -23081,7 +23110,7 @@ END GUIDES AI INSTRUCTIONS -->
 
       const sobra = ALL_GUIDES_FLAT.filter(g => !mapped.has(g.id));
       if (sobra.length) {
-        sections.push({ icon: 'book', label: 'Outros guias', subtitle: 'Mais conteúdos', guides: sobra, key: 'tema-outros' });
+        sections.push({ icon: 'book', label: guideLabel('otherGuides', 'Outros guias'), subtitle: guideLabel('moreContent', 'Mais conteúdos'), guides: sobra, key: 'tema-outros' });
       }
       return sections;
     }
@@ -23114,7 +23143,7 @@ END GUIDES AI INSTRUCTIONS -->
       const doneCount = ALL_ITEMS_FLAT.filter(isItemDone).length;
       const totalCount = ALL_ITEMS_FLAT.length;
       const journeyPct = totalCount ? Math.round(doneCount / totalCount * 100) : 0;
-      if (progLabelEl) progLabelEl.innerHTML = `${iconHTML(plantStageIcon(journeyPct), 15)} ${doneCount} de ${totalCount}`;
+      if (progLabelEl) progLabelEl.innerHTML = `${iconHTML(plantStageIcon(journeyPct), 15)} ${doneCount} ${_escapeHtml(guideLabel('progressOf', 'de'))} ${totalCount}`;
       if (progFillEl) progFillEl.style.width = journeyPct + '%';
 
       pathEl.innerHTML = '';
@@ -23223,7 +23252,7 @@ END GUIDES AI INSTRUCTIONS -->
             const ringHTML = !isDone && readFraction > 0 ? journeyNodeRingHTML(readFraction) : '';
             col.innerHTML = `
           <div class="journey-node ${state}" onclick="openGuide('${guide.id}', '${fromTag}')">
-            ${isCurrent ? '<div class="journey-node-label">Começar</div>' : ''}
+            ${isCurrent ? `<div class="journey-node-label">${_escapeHtml(guideLabel('start', 'Começar'))}</div>` : ''}
             ${ringHTML}
             ${iconHTML(guideIconId(guide), 26, nodeIconColor)}
             ${isDone ? `<div class="journey-node-check">${iconHTML('check-badge', 12)}</div>` : ''}
@@ -23270,20 +23299,32 @@ END GUIDES AI INSTRUCTIONS -->
         pathEl.appendChild(sectionWrap);
       });
 
-      // Cartão de encerramento da trilha — sempre visível ao final do
-      // percurso, avisando que depois dos 2 anos a jornada continua no app
-      // Garfinho (não depende de ter concluído os guias, é só o destino
-      // final da trilha). Na lista não existe "última etapa" (as seções são
-      // temas, não fases), então o convite entra sem a moldura de progresso.
-      const finishCard = document.createElement('div');
-      finishCard.className = 'journey-finish-card';
-      finishCard.innerHTML = `
-      <div class="journey-finish-title">${mode === 'list' ? 'Seu bebê já passou dos 2 anos?' : 'Parabéns, você chegou na última etapa!'}</div>
-      <div class="journey-finish-text">${mode === 'list' ? 'A jornada da alimentação continua no <strong>Garfinho</strong>, nosso app para crianças a partir de 2 anos.' : 'Agora é hora de continuar a jornada da alimentação no <strong>Garfinho</strong>, nosso app para crianças a partir de 2 anos.'}</div>
-      <button class="journey-finish-btn" type="button">Conhecer o Garfinho →</button>
-    `;
-      finishCard.querySelector('.journey-finish-btn').onclick = () => openGarfinhoApp();
-      pathEl.appendChild(finishCard);
+      // Completion copy and visibility are configured per journey.
+      const finish = hydrateContractContent.finishCard || {};
+      if (finish.enabled !== false) {
+        const finishCard = document.createElement('div');
+        finishCard.className = 'journey-finish-card';
+        const copy = (key, fallback) => typeof finish[key] === 'string' ? finish[key] : guideLabel('finish' + key[0].toUpperCase() + key.slice(1), fallback);
+        const title = document.createElement('div');
+        title.className = 'journey-finish-title';
+        title.textContent = mode === 'list' ? copy('listTitle', "Seu beb\u00ea j\u00e1 passou dos 2 anos?") : copy('title', "Parab\u00e9ns, voc\u00ea chegou na \u00faltima etapa!");
+        const description = document.createElement('div');
+        description.className = 'journey-finish-text';
+        description.textContent = mode === 'list' ? copy('listText', "A jornada da alimenta\u00e7\u00e3o continua no Garfinho, nosso app para crian\u00e7as a partir de 2 anos.") : copy('text', "Agora \u00e9 hora de continuar a jornada da alimenta\u00e7\u00e3o no Garfinho, nosso app para crian\u00e7as a partir de 2 anos.");
+        const button = document.createElement('button');
+        button.className = 'journey-finish-btn';
+        button.textContent = copy('buttonLabel', "Conhecer o Garfinho \u2192");
+        button.type = 'button';
+        button.onclick = () => {
+          if (finish.actionItem) {
+            GuidesAPI.openActionItem(finish.actionItem).catch(error => debugLogError('completion:openActionItem', error));
+          } else {
+            openGarfinhoApp();
+          }
+        };
+        finishCard.append(title, description, button);
+        pathEl.appendChild(finishCard);
+      }
 
       // A estradinha só pode ser medida depois que tudo já está no DOM.
       // O rAF espera o layout assentar: medir no mesmo quadro devolve
@@ -23520,7 +23561,7 @@ END GUIDES AI INSTRUCTIONS -->
 
         const tocLabel = document.createElement('div');
         tocLabel.className = 'toc-label';
-        tocLabel.textContent = '\uD83D\uDCCB Neste guia';
+        tocLabel.textContent = '\uD83D\uDCCB ' + guideLabel('inThisGuide', 'Neste guia');
         authoredToc.appendChild(tocLabel);
 
         authoredTocParagraph.querySelectorAll('a').forEach(sourceLink => {
@@ -23655,7 +23696,10 @@ END GUIDES AI INSTRUCTIONS -->
         // Build the TOC box
         const tocDiv = document.createElement('div');
         tocDiv.className = 'guide-toc';
-        tocDiv.innerHTML = '<div class="toc-label">📋 Neste guia</div>';
+        const label = document.createElement('div');
+        label.className = 'toc-label';
+        label.textContent = '📋 ' + guideLabel('inThisGuide', 'Neste guia');
+        tocDiv.appendChild(label);
         tocItems.forEach(({ el, secId, text }) => {
           const a = document.createElement('a');
           a.className = 'toc-link' + (secId ? '' : ' toc-link-noanchor');
@@ -23683,7 +23727,7 @@ END GUIDES AI INSTRUCTIONS -->
       if (refHeading) {
         const refDiv = document.createElement('div');
         refDiv.className = 'guide-refs';
-        refDiv.innerHTML = '<div class="refs-label">📚 Referências</div>';
+        refDiv.innerHTML = '<div class="refs-label">📚 ' + _escapeHtml(guideLabel('references', 'Referências')) + '</div>';
         let node = refHeading.nextSibling;
         refHeading.remove();
         while (node) {
@@ -23732,10 +23776,13 @@ END GUIDES AI INSTRUCTIONS -->
           }
         });
       });
+      // The same reader container is reused when opening another guide.
+      if (content.dataset.guidesActionsBound) return;
+      content.dataset.guidesActionsBound = 'true';
       content.addEventListener('click', event => {
-        const link = event.target.closest && event.target.closest('a');
+        const link = event.target.closest && event.target.closest('[data-action-item], [data-execute], a');
         if (!link || !content.contains(link)) return;
-        const encodedAction = link.getAttribute('data-action-item');
+        const encodedAction = link.getAttribute('data-action-item') || link.getAttribute('data-execute');
         if (encodedAction) {
           event.preventDefault();
           event.stopImmediatePropagation();
@@ -23936,10 +23983,10 @@ END GUIDES AI INSTRUCTIONS -->
 
       const btn = document.getElementById('btn-mark-read');
       if (readGuides.has(id)) {
-        btn.textContent = '✓ Já lido!';
+        btn.textContent = guideLabel('alreadyRead', '✓ Já lido!');
         btn.className = 'btn-read done';
       } else {
-        btn.textContent = '✓ Marcar como lido';
+        btn.textContent = guideLabel('markRead', '✓ Marcar como lido');
         btn.className = 'btn-read';
       }
       renderRelatedGuides(guide);
@@ -24006,7 +24053,7 @@ END GUIDES AI INSTRUCTIONS -->
 
       const btn = document.getElementById('btn-mark-read');
       if (btn) {
-        btn.textContent = nowRead ? '✓ Já lido!' : '✓ Marcar como lido';
+        btn.textContent = nowRead ? guideLabel('alreadyRead', '✓ Já lido!') : guideLabel('markRead', '✓ Marcar como lido');
         btn.className = 'btn-read' + (nowRead ? ' done' : '');
       }
 
@@ -24124,68 +24171,105 @@ END GUIDES AI INSTRUCTIONS -->
     let persistedBirthdate = null;
     let contractSaveQueue = Promise.resolve();
 
-    function hydrateContractContent(data) {
-      // Canonical datastore content is supplied by the protected runtime. Keep
-      // embedded definitions as a direct-file preview and as a fallback for any
-      // legacy quiz record that does not yet contain playable questions.
-      const lessonById = new Map(ALL_GUIDES_FLAT.map(guide => [guide.id, guide]));
-      (data.lessons || []).forEach(lesson => {
-        const guide = lessonById.get(lesson.slug);
-        if (!guide) return;
-        guide.title = lesson.title || guide.title;
-        guide.summary = lesson.summary || guide.summary || '';
-        guide.tag = lesson.tag || guide.tag || '';
-        guide.readTime = lesson.readTime || guide.readTime || '';
-        guide.tldr = Array.isArray(lesson.tldr) ? lesson.tldr.slice() : (guide.tldr || []);
-        guide.content = lesson.bodyHtml || guide.content || '';
-        guide.premium = lesson.premium === true;
-      });
+    // Shell-owned labels are editable independently of the renderer.
+    function guideLabel(key, fallback) {
+      const node = document.getElementById('guides-ui-labels');
+      if (!node) return fallback;
+      try {
+        const labels = JSON.parse(node.textContent || '{}');
+        return typeof labels[key] === 'string' ? labels[key] : fallback;
+      } catch (error) { return fallback; }
+    }
 
-      const storedQuizzes = (data.quizzes || []).filter(storedQuiz =>
-        storedQuiz && storedQuiz.id && Array.isArray(storedQuiz.questions) && storedQuiz.questions.length
-      );
-      storedQuizzes.forEach(storedQuiz => {
-        let quiz = QUIZ_BY_ID[storedQuiz.id];
-        if (!quiz) {
-          quiz = { id: storedQuiz.id };
-          QUIZZES.push(quiz);
-        }
-        quiz.title = storedQuiz.title || quiz.title;
-        quiz.questions = Number(storedQuiz.questionCount) || quiz.questions;
-        quiz.afterGuideId = storedQuiz.afterGuideId || quiz.afterGuideId;
-        quiz.alsoAfterGuideIds = Array.isArray(storedQuiz.alsoAfterGuideIds)
-          ? storedQuiz.alsoAfterGuideIds.slice() : [];
-        QUIZ_CONTENT[storedQuiz.id] = {
-          sourceGuideId: storedQuiz.sourceGuideId || quiz.afterGuideId,
-          intro: storedQuiz.intro || {},
-          questions: Array.isArray(storedQuiz.questions) ? storedQuiz.questions : [],
-          bonus: storedQuiz.bonus || null,
-          results: Array.isArray(storedQuiz.results) ? storedQuiz.results : []
-        };
+    let contractJourneySections = null;
+
+    function hydrateContractContent(data) {
+      // A snapshot is complete, including an intentionally empty library.
+      // Never merge supplied records with the bundled Brazilian catalog.
+      const archivedGuides = new Set(data.archivedLessonIds || []);
+      const archivedQuizzes = new Set(data.archivedQuizIds || []);
+      const guides = new Map();
+      (data.lessons || []).forEach(lesson => {
+        if (!lesson || !lesson.slug || lesson.published === false || archivedGuides.has(lesson.slug)) return;
+        guides.set(lesson.slug, {
+          ...lesson, id: lesson.slug, title: lesson.title || '',
+          summary: lesson.summary || '', tag: lesson.tag || '',
+          readTime: lesson.readTime || '', icon: lesson.icon || 'book',
+          tldr: Array.isArray(lesson.tldr) ? lesson.tldr.slice() : [],
+          content: lesson.bodyHtml || '', premium: lesson.premium === true
+        });
       });
-      if (storedQuizzes.length) {
-        Object.keys(QUIZ_BY_ID).forEach(key => delete QUIZ_BY_ID[key]);
-        Object.keys(QUIZ_BY_GUIDE_ID).forEach(key => delete QUIZ_BY_GUIDE_ID[key]);
-        QUIZZES.forEach(quiz => {
-          QUIZ_BY_ID[quiz.id] = quiz;
-          [quiz.afterGuideId, ...(quiz.alsoAfterGuideIds || [])].filter(Boolean).forEach(guideId => {
-            (QUIZ_BY_GUIDE_ID[guideId] = QUIZ_BY_GUIDE_ID[guideId] || []).push(quiz);
-          });
-        });
-        ALL_ITEMS_FLAT.splice(0, ALL_ITEMS_FLAT.length);
-        // Mesmo dedupe do builder original: um quiz que serve dois guias aparece
-        // duas vezes na trilha de propósito, mas aqui só pode contar UMA vez -
-        // senão ele infla o total do progresso e uma partida marca duas conclusões.
-        const vistosNoRebuild = new Set();
-        ALL_GUIDES_FLAT.forEach(guide => {
-          ALL_ITEMS_FLAT.push({ id: guide.id, kind: 'guide' });
-          (QUIZ_BY_GUIDE_ID[guide.id] || []).forEach(quiz => {
-            if (vistosNoRebuild.has(quiz.id)) return;
-            vistosNoRebuild.add(quiz.id);
-            ALL_ITEMS_FLAT.push({ id: quiz.id, kind: 'quiz' });
-          });
-        });
-      }
+      const journeys = (data.journeyData && data.journeyData.journeys || []).filter(j => j.published !== false);
+      const journey = journeys.find(j => j.id === (data.journeyData && data.journeyData.defaultJourneyId))
+        || journeys[0] || (data.activeJourney && data.activeJourney.published !== false ? data.activeJourney : null) || {};
+      hydrateContractContent.finishCard = journey.finishCard || {};
+      document.querySelectorAll('.journey-embed-title, .journey-intro-title').forEach(node => {
+        node.textContent = journey.title || '';
+        node.hidden = !journey.title;
+      });
+      document.querySelectorAll('.journey-intro-sub').forEach(node => {
+        node.textContent = journey.description || '';
+        node.hidden = !journey.description;
+      });
+      const resolve = ids => Array.from(new Set(ids || [])).map(id => guides.get(id)).filter(Boolean);
+      const placed = new Set();
+      contractJourneySections = (journey.sections || []).map(section => {
+        const items = resolve(section.lessonIds).filter(g => !placed.has(g.id));
+        items.forEach(g => placed.add(g.id));
+        return { key: section.id, phaseKey: /^\d+$/.test(section.id) ? section.id : null,
+          label: section.title || '', subtitle: section.subtitle || '', icon: section.icon || 'leaf', guides: items };
+      }).filter(section => section.guides.length);
+      const unplaced = Array.from(guides.values()).filter(g => !placed.has(g.id));
+      if (unplaced.length) contractJourneySections.push({ key: 'unplaced', icon: 'book',
+        label: guideLabel('otherGuides', 'Outros guias'), subtitle: '', guides: unplaced });
+      ALL_GUIDES_FLAT.splice(0, ALL_GUIDES_FLAT.length, ...contractJourneySections.flatMap(section => section.guides));
+      FUNDAMENTALS.splice(0, FUNDAMENTALS.length, ...resolve((journey.sections || []).find(s => s.id === 'fundamentals')?.lessonIds));
+      AGELESS_GUIDES.splice(0, AGELESS_GUIDES.length, ...resolve((journey.sections || []).find(s => s.id === 'ageless')?.lessonIds));
+      // Age recommendations are independent of curriculum placement.
+      Object.keys(GUIDES_DATA).forEach(key => delete GUIDES_DATA[key]);
+      Object.entries(journey.phaseHighlights || {}).forEach(([key, ids]) => { GUIDES_DATA[key] = resolve(ids); });
+      const categorized = new Set();
+      LIST_THEMES.splice(0, LIST_THEMES.length, ...(journey.listThemes || []).map(theme => {
+        const items = resolve(theme.lessonIds).filter(g => !categorized.has(g.id));
+        items.forEach(g => categorized.add(g.id));
+        return { ...theme, guides: items };
+      }).filter(theme => theme.guides.length));
+      LIST_THEMES.forEach(theme => { if (!(theme.key in moduleState)) moduleState[theme.key] = true; });
+      _themeKeyByGuideId = null;
+      _searchIndex = null;
+      _fullSearchIndex = null;
+      currentGuides = collectAllLibraryGuides();
+      allCurrentGuides = ALL_GUIDES_FLAT.slice();
+      phaseHighlightGuides = currentPhase ? GUIDES_DATA[currentPhase.key] || [] : [];
+      Object.keys(MONTHLY_SUMMARY).forEach(key => delete MONTHLY_SUMMARY[key]);
+      const listItems = html => {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html || '';
+        return Array.from(wrapper.querySelectorAll('li')).map(li => li.innerHTML);
+      };
+      Object.entries(journey.milestones || {}).forEach(([key, value]) => {
+        MONTHLY_SUMMARY[key] = { ...value,
+          esperar: Array.isArray(value.esperar) ? value.esperar : listItems(value.expectHtml),
+          lembrese: Array.isArray(value.lembrese) ? value.lembrese : listItems(value.rememberHtml) };
+      });
+      QUIZZES.splice(0, QUIZZES.length);
+      [QUIZ_BY_ID, QUIZ_BY_GUIDE_ID, QUIZ_CONTENT].forEach(index => Object.keys(index).forEach(key => delete index[key]));
+      (data.quizzes || []).forEach(record => {
+        if (!record || !record.id || record.published === false || archivedQuizzes.has(record.id) || QUIZ_BY_ID[record.id]) return;
+        const linked = resolve([record.afterGuideId, ...(record.alsoAfterGuideIds || [])]);
+        if (!linked.length) return;
+        const quiz = { ...record, afterGuideId: linked[0].id,
+          alsoAfterGuideIds: linked.slice(1).map(g => g.id),
+          questions: Array.isArray(record.questions) ? record.questions.length : Number(record.questionCount) || 0 };
+        QUIZZES.push(quiz);
+        QUIZ_BY_ID[quiz.id] = quiz;
+        linked.forEach(g => { (QUIZ_BY_GUIDE_ID[g.id] = QUIZ_BY_GUIDE_ID[g.id] || []).push(quiz); });
+        if (Array.isArray(record.questions) && record.questions.length) {
+          QUIZ_CONTENT[quiz.id] = { sourceGuideId: guides.has(record.sourceGuideId) ? record.sourceGuideId : quiz.afterGuideId,
+            intro: record.intro || {}, questions: record.questions, bonus: record.bonus || null, results: record.results || [] };
+        }
+      });
+      ALL_ITEMS_FLAT.splice(0, ALL_ITEMS_FLAT.length, ...curriculumOrder());
     }
 
     function applyContractState(data) {
@@ -24289,6 +24373,8 @@ END GUIDES AI INSTRUCTIONS -->
     initializeContractShell().catch(error => {
       debugLogError('initializeContractShell', error);
       console.error('[guias] falha ao iniciar pelo GuidesAPI', error);
+      // A failed canonical load must not expose the bundled catalog.
+      hydrateContractContent({ lessons: [], quizzes: [] });
       showScreen('age');
       renderJourneyHome();
     });

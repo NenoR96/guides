@@ -73,3 +73,27 @@ test("editing a guide preserves its position in ordered journey references", () 
         ["guide-a", "guide-c"]
     );
 });
+
+test("category metadata is synchronized when only its label, subtitle, or icon changes", async () => {
+    const source = fs.readFileSync(path.join(root, 'control/content/index.html'), 'utf8');
+    const start = source.indexOf('            async function syncLessonOrganizationMetadata(');
+    const end = source.indexOf('            async function handleJourneySave(', start);
+    const lesson = { _recordId: 'record-a', slug: 'guide-a', listThemeKey: 'category-a',
+        listThemeLabel: 'Old title', listThemeSubtitle: 'Old subtitle', listThemeIcon: 'book',
+        phaseKeys: ['6'], journeySectionKey: '6' };
+    const writes = [];
+    const sync = new Function('state', 'AGE_KEYS', 'updateLesson',
+        source.slice(start, end) + '; return syncLessonOrganizationMetadata;')(
+        { lessons: [lesson] }, ['6'], async (id, data) => writes.push({ id, data }));
+    const journey = { listThemes: [{ key: 'category-a', label: 'New title', subtitle: 'New subtitle',
+        icon: 'leaf', lessonIds: ['guide-a'] }], phaseHighlights: { 6: ['guide-a'] },
+        sections: [{ id: '6', lessonIds: ['guide-a'] }] };
+    await sync(journey);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].data.listThemeLabel, 'New title');
+    assert.equal(writes[0].data.listThemeSubtitle, 'New subtitle');
+    assert.equal(writes[0].data.listThemeIcon, 'leaf');
+    Object.assign(lesson, writes[0].data);
+    await sync(journey);
+    assert.equal(writes.length, 1, 'unchanged metadata does not trigger another write');
+});

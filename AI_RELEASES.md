@@ -94,6 +94,34 @@ Existing guide IDs (`lesson.slug` in the compatibility schema) and journey IDs a
 change its stable ID. Guides omitted from `lessons` are preserved. Intentional
 archival uses `archivedLessonIds`.
 
+## Shared HTML renderer and country versions
+
+The corrected `guias-interativo.html` builds its guide and quiz catalog from the
+complete `GuidesAPI` snapshot. Empty snapshots stay empty; embedded legacy guide
+and quiz definitions are not merged back into the catalog. Journey sections and
+category arrays control placement and order, while `phaseHighlights` independently
+controls age recommendations. Empty groups are hidden. Published guides missing
+placement appear under Other guides so a manual addition remains accessible.
+
+The standalone working-file bootstrap filters unpublished records and explicit
+archive lists, as does the canonical data path. Staged previews still reflect the
+selected guide/organization and quiz update options.
+
+The shell's `#guides-ui-labels` JSON block contains configurable generated labels,
+including `inThisGuide` (set to `Dans ce guide` for French). Static page copy remains
+editable in the HTML. Guide titles, bodies, category labels, section labels, and
+milestones come from content records. This is a localization mechanism, not an
+automatic translation of a country file.
+
+When preparing a country release, combine its content with the corrected shell;
+uploading an older country HTML also uploads its older JavaScript. An archived
+record must be omitted from the uploaded `lessons`/`quizzes` array, with its stable
+ID retained in the corresponding archive list. The validator rejects a record
+that is both updated and archived in one release.
+
+The shared template is uploaded through the HTML release workflow; changing the
+local file or rebuilding the plugin does not replace an already published shell.
+
 ## Stored records
 
 - `guideReleaseState`: active release pointer.

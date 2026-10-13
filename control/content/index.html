@@ -106,6 +106,14 @@
             display: block;
         }
 
+        .organization-view-tabs.field { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 4px; border-radius: 9px; background: #eef1f6; }
+        .organization-view-tab { flex: 1; padding: 11px 16px; border: 0; border-radius: 6px; background: transparent; color: #596170; font-weight: 650; }
+        .organization-view-tab[aria-selected="true"] { background: #fff; color: #245db3; box-shadow: 0 1px 4px #00000015; }
+        .organization-view-tab:focus-visible { outline: 2px solid #356fd0; outline-offset: 2px; }
+        .organization-view-panel.field { display: grid; gap: 18px; min-width: 0; }
+        .organization-view-panel[hidden] { display: none; }
+        #organization-warnings[hidden] { display: none; }
+
         .layout {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
@@ -550,7 +558,7 @@
 
         .section-row {
             display: grid;
-            grid-template-columns: 1fr 1.4fr 1.4fr 0.7fr auto;
+            grid-template-columns: 1fr;
             gap: 8px;
             padding: 12px;
             border: 1px solid #e1e5eb;
@@ -567,6 +575,22 @@
             align-self: start;
             color: #b42318;
         }
+
+        .section-heading, .section-guide, .section-add {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .section-heading strong, .section-guide-name { flex: 1; min-width: 140px; }
+        .section-guide { padding: 10px; background: #fff; border: 1px solid #e1e5eb; border-radius: 7px; }
+        .section-guide-name { font-size: 13px; }
+        .section-guide select { width: auto; max-width: 210px; flex: 1; }
+        .section-add select { flex: 1; min-width: 160px; }
+        .section-guide-list { display: grid; gap: 6px; }
+        .section-empty { color: #637083; padding: 12px; font-size: 13px; }
+        #journey-form > .actions { position: sticky; bottom: 0; background: #fff; padding: 12px 0; border-top: 1px solid #e1e5eb; z-index: 2; }
 
         .json-field {
             font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -1239,18 +1263,42 @@
                                 <label><input id="journey-published" type="checkbox" checked> Published</label>
                             </div>
 
+
+                            <div class="organization-view-tabs field full" role="tablist" aria-label="Organization view">
+                                <button class="organization-view-tab" id="organization-tab-journey" type="button" role="tab" aria-controls="organization-view-journey" aria-selected="true" tabindex="0">Journey</button>
+                                <button class="organization-view-tab" id="organization-tab-list" type="button" role="tab" aria-controls="organization-view-list" aria-selected="false" tabindex="-1">List view</button>
+                                <button class="organization-view-tab" id="organization-tab-age" type="button" role="tab" aria-controls="organization-view-age" aria-selected="false" tabindex="-1">Age personalization</button>
+                                <button class="organization-view-tab" id="organization-tab-milestones" type="button" role="tab" aria-controls="organization-view-milestones" aria-selected="false" tabindex="-1">Milestones</button>
+                                <button class="organization-view-tab" id="organization-tab-completion" type="button" role="tab" aria-controls="organization-view-completion" aria-selected="false" tabindex="-1">Journey completion</button>
+                            </div>
+                            <div class="notice warning field full" id="organization-warnings" role="status" hidden></div>
+                            <div class="organization-view-panel field full" id="organization-view-journey" role="tabpanel" aria-labelledby="organization-tab-journey">
                             <section class="organization-block field full">
                                 <div class="card-header">
                                     <div>
-                                        <h2>Categories</h2>
-                                        <p class="description">Drag categories or guides to change the Lista view.</p>
+                                        <h2>Journey view</h2>
+                                        <p class="description">Arrange sections and guides in the order they appear on the path. Changes apply when you save organization.</p>
+                                    </div>
+                                    <button class="btn small" id="add-section" type="button">Add section</button>
+                                </div>
+                                <div class="sections" id="sections"></div>
+                            </section>
+                            </div>
+                            <div class="organization-view-panel field full" id="organization-view-list" role="tabpanel" aria-labelledby="organization-tab-list" hidden>
+                            <section class="organization-block field full">
+                                <div class="card-header">
+                                    <div>
+                                        <h2>List view categories</h2>
+                                        <p class="description">Group guides by topic. Changes here affect the List view; journey placement is managed in the Journey tab.</p>
                                     </div>
                                     <button class="btn small" id="add-theme" type="button">Add category</button>
                                 </div>
                                 <div class="theme-editor" id="theme-editor"></div>
-                                <div class="notice warning" id="organization-warnings" hidden></div>
-                            </section>
 
+                            </section>
+                            </div>
+
+                            <div class="organization-view-panel field full" id="organization-view-age" role="tabpanel" aria-labelledby="organization-tab-age" hidden>
                             <section class="organization-block field full">
                                 <div class="card-header">
                                     <div>
@@ -1261,7 +1309,8 @@
                                 <div class="age-tabs" id="age-tabs"></div>
                                 <div class="choice-grid lesson-choices" id="age-lesson-options"></div>
                             </section>
-
+                            </div>
+                            <div class="organization-view-panel field full" id="organization-view-milestones" role="tabpanel" aria-labelledby="organization-tab-milestones" hidden>
                             <section class="organization-block field full">
                                 <div class="card-header">
                                     <div>
@@ -1271,6 +1320,27 @@
                                 </div>
                                 <div class="milestone-editor" id="milestone-editor"></div>
                             </section>
+                            </div>
+
+                            <div class="organization-view-panel field full" id="organization-view-completion" role="tabpanel" aria-labelledby="organization-tab-completion" hidden>
+                            <section class="organization-block field full">
+                                <h2>Journey completion section</h2>
+                                <div class="check-row">
+                                    <label><input id="finish-enabled" type="checkbox" checked> Show completion section</label>
+                                </div>
+                                <p class="description">Shown at the bottom of Journey and List views. Enter translated text below, or leave blank to use the shell translation.</p>
+                                <div class="field"><label for="finish-title">Journey title</label><input id="finish-title"></div>
+                                <div class="field"><label for="finish-text">Journey description</label><input id="finish-text"></div>
+                                <div class="field"><label for="finish-listTitle">List view title</label><input id="finish-listTitle"></div>
+                                <div class="field"><label for="finish-listText">List view description</label><input id="finish-listText"></div>
+                                <div class="field"><label for="finish-buttonLabel">Button label</label><input id="finish-buttonLabel"></div>
+                                <div class="field">
+                                    <label>Button action</label>
+                                    <p id="finish-action-summary" class="description"></p>
+                                    <button class="btn" id="finish-select-action" type="button">Select action</button>
+                                </div>
+                            </section>
+                            </div>
 
                             <details class="advanced field full" id="journey-advanced">
                                 <summary>Advanced journey and data tools</summary>
@@ -1285,12 +1355,6 @@
                                     <div class="form-grid">
                                         <div class="field full"><label for="journey-id">Stable journey ID</label><input
                                                 id="journey-id" placeholder="blw-0-a-2"></div>
-                                        <div class="field full">
-                                            <div class="card-header"><label>Curriculum sections</label><button
-                                                    class="btn small" id="add-section" type="button">Add
-                                                    section</button></div>
-                                            <div class="sections" id="sections"></div>
-                                        </div>
                                         <div class="field full"><label for="phase-highlights">Phase highlights
                                                 JSON</label><textarea class="json-field"
                                                 id="phase-highlights"></textarea></div>
@@ -2768,6 +2832,56 @@
                 })).filter((section) => section.id || section.title || section.lessonIds.length);
             }
 
+            function readFinishCard() {
+                const card = { ...(state.organizationDraft && state.organizationDraft.finishCard || {}), enabled: $("finish-enabled").checked };
+                ["title", "text", "listTitle", "listText", "buttonLabel"].forEach(key => {
+                    const value = $("finish-" + key).value.trim();
+                    if (value) card[key] = value;
+                    else delete card[key];
+                });
+                return card;
+            }
+
+            function renderFinishAction(card) {
+                const action = card.actionItem;
+                $("finish-action-summary").textContent = action
+                    ? (action.title || action.url || action.phoneNumber || action.email || action.action || "Selected action")
+                    : "Default: open Garfinho";
+                $("finish-select-action").textContent = action ? "Edit action" : "Select action";
+            }
+
+            $("finish-select-action").addEventListener("click", () => {
+                const draft = state.organizationDraft;
+                if (!draft) return;
+                if (!buildfire.actionItems || typeof buildfire.actionItems.showDialog !== "function") {
+                    setStatus($("journey-status"), "Action selection is unavailable.", "error");
+                    return;
+                }
+                const current = draft.finishCard && draft.finishCard.actionItem;
+                buildfire.actionItems.showDialog(current ? clone(current) : null,
+                    { showIcon: false, hideActionText: true, allowNoAction: true }, (error, actionItem) => {
+                        if (state.organizationDraft !== draft) return;
+                        if (error) {
+                            setStatus($("journey-status"), errorMessage(error), "error");
+                            return;
+                        }
+                        if (!actionItem) return;
+                        draft.finishCard = { ...readFinishCard(), actionItem: clone(actionItem) };
+                        renderFinishAction(draft.finishCard);
+                        syncAdvancedJsonFromDraft();
+                        setStatus($("journey-status"), "Button action selected. Save organization to publish it.", "success");
+                    });
+            });
+
+            function fillFinishCard(journey) {
+                const card = journey.finishCard || {};
+                renderFinishAction(card);
+                $("finish-enabled").checked = card.enabled !== false;
+                ["title", "text", "listTitle", "listText", "buttonLabel"].forEach(key => {
+                    $("finish-" + key).value = typeof card[key] === "string" ? card[key] : "";
+                });
+            }
+
             function syncAdvancedJsonFromDraft() {
                 if (!state.organizationDraft) return;
                 state.organizationDraft.sections = readSectionRows();
@@ -2779,6 +2893,7 @@
                     id: normalizeSlug($("journey-id").value),
                     title: $("journey-title").value.trim(),
                     description: $("journey-description").value.trim(),
+                    finishCard: readFinishCard(),
                     published: $("journey-published").checked
                 }, null, 2);
             }
@@ -3010,33 +3125,149 @@
                 renderMilestoneEditor();
             }
 
-            function createSectionRow(section) {
-                const row = document.createElement("div");
-                row.className = "section-row";
-                row.innerHTML = [
-                    '<input class="section-id" aria-label="Section ID" placeholder="fundamentals">',
-                    '<input class="section-title" aria-label="Section title" placeholder="A Base do BLW">',
-                    '<input class="section-subtitle" aria-label="Section subtitle" placeholder="Section description">',
-                    '<input class="section-icon" aria-label="Icon ID" placeholder="leaf">',
-                    '<button class="btn small remove" type="button">Remove</button>',
-                    '<textarea class="section-lessons" aria-label="Guide IDs" placeholder="One guide Stable ID per line"></textarea>'
-                ].join("");
-                row.querySelector(".section-id").value = section && section.id || "";
-                const savedJourney = state.journeys.find((item) => item.id === state.selectedJourneyId);
-                const isExistingSection = !!(section && section.id && savedJourney &&
-                    (savedJourney.sections || []).some((item) => item.id === section.id));
-                row.querySelector(".section-id").disabled = isExistingSection;
-                if (isExistingSection) row.querySelector(".section-id").title = "Stable section IDs cannot be changed after creation.";
-                row.querySelector(".section-title").value = section && section.title || "";
-                row.querySelector(".section-subtitle").value = section && section.subtitle || "";
-                row.querySelector(".section-icon").value = section && section.icon || "";
-                row.querySelector(".section-lessons").value = section && Array.isArray(section.lessonIds) ? section.lessonIds.join("\n") : "";
-                row.querySelector(".remove").addEventListener("click", () => {
-                    row.remove();
-                    syncAdvancedJsonFromDraft();
+            function commitSectionEdit() {
+                syncAdvancedJsonFromDraft();
+                refreshSectionControls();
+                updateOrganizationWarnings();
+            }
+
+            function moveGuideToSection(slug, destination, position) {
+                Array.from(sectionsContainer.querySelectorAll('.section-row')).forEach(row => {
+                    const field = row.querySelector('.section-lessons');
+                    field.value = splitLines(field.value).filter(id => id !== slug).join('\n');
                 });
-                row.addEventListener("input", syncAdvancedJsonFromDraft);
+                if (destination) {
+                    const field = destination.querySelector('.section-lessons');
+                    const ids = splitLines(field.value);
+                    ids.splice(position == null ? ids.length : position, 0, slug);
+                    field.value = ids.join('\n');
+                }
+                commitSectionEdit();
+                if (destination) {
+                    const item = Array.from(destination.querySelectorAll('.section-guide')).find(row => row.dataset.slug === slug);
+                    if (item) item.querySelector('.section-guide-name').focus();
+                }
+            }
+
+            function refreshSectionControls() {
+                const rows = Array.from(sectionsContainer.querySelectorAll('.section-row'));
+                rows.forEach((row, index) => {
+                    const ids = splitLines(row.querySelector('.section-lessons').value);
+                    row.querySelector('.section-number').textContent = 'Section ' + (index + 1) + ' - ' + ids.length + (ids.length === 1 ? ' guide' : ' guides');
+                    row.querySelector('.section-up').disabled = index === 0;
+                    row.querySelector('.section-down').disabled = index === rows.length - 1;
+                    const list = row.querySelector('.section-guide-list');
+                    list.innerHTML = '';
+                    if (!ids.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'section-empty';
+                        empty.textContent = 'No guides yet. Choose a guide below to add it here.';
+                        list.appendChild(empty);
+                    }
+                    ids.forEach((slug, guideIndex) => {
+                        const item = document.createElement('div');
+                        item.className = 'section-guide';
+                        item.dataset.slug = slug;
+                        const title = document.createElement('span');
+                        title.className = 'section-guide-name';
+                        title.tabIndex = -1;
+                        const guide = state.lessons.find(lesson => lesson.slug === slug);
+                        title.textContent = (guideIndex + 1) + '. ' + lessonTitle(slug) + (guide && guide.published === false ? ' (draft)' : '');
+                        const button = (label, description, disabled, action) => {
+                            const element = document.createElement('button');
+                            element.type = 'button';
+                            element.className = 'btn small';
+                            element.textContent = label;
+                            element.title = description;
+                            element.setAttribute('aria-label', description + ': ' + lessonTitle(slug));
+                            element.disabled = disabled;
+                            element.addEventListener('click', action);
+                            return element;
+                        };
+                        const move = document.createElement('select');
+                        move.setAttribute('aria-label', 'Move ' + lessonTitle(slug) + ' to another section');
+                        move.add(new Option('Move to section...', ''));
+                        rows.forEach((target, targetIndex) => {
+                            if (target !== row) move.add(new Option((targetIndex + 1) + '. ' + (target.querySelector('.section-title').value || 'Untitled section'), String(targetIndex)));
+                        });
+                        move.disabled = rows.length < 2;
+                        move.addEventListener('change', () => {
+                            if (move.value !== '') moveGuideToSection(slug, rows[Number(move.value)]);
+                        });
+                        item.append(title,
+                            button('Up', 'Move guide up', guideIndex === 0, () => moveGuideToSection(slug, row, guideIndex - 1)),
+                            button('Down', 'Move guide down', guideIndex === ids.length - 1, () => moveGuideToSection(slug, row, guideIndex + 1)),
+                            move, button('Remove', 'Remove from this section', false, () => moveGuideToSection(slug, null)));
+                        list.appendChild(item);
+                    });
+                    const select = row.querySelector('.section-add-select');
+                    select.innerHTML = '';
+                    select.add(new Option('Choose a guide...', ''));
+                    sortedLessons().filter(lesson => !ids.includes(lesson.slug)).forEach(lesson => {
+                        const source = rows.find(other => splitLines(other.querySelector('.section-lessons').value).includes(lesson.slug));
+                        const location = source ? ' - move from ' + (source.querySelector('.section-title').value || 'Untitled section') : ' - not placed';
+                        select.add(new Option((lesson.title || lesson.slug) + location, lesson.slug));
+                    });
+                    row.querySelector('.section-add-button').disabled = true;
+                });
+            }
+
+            function createSectionRow(section) {
+                const row = document.createElement('div');
+                row.className = 'section-row';
+                row.innerHTML = [
+                    '<div class="section-heading"><strong class="section-number"></strong><button class="btn small section-up" type="button" aria-label="Move section up">Up</button><button class="btn small section-down" type="button" aria-label="Move section down">Down</button><button class="btn small remove" type="button">Delete section</button></div>',
+                    '<label>Section title<input class="section-title" placeholder="For example: Getting ready"></label>',
+                    '<label>Description (optional)<input class="section-subtitle" placeholder="A short introduction"></label>',
+                    '<div class="section-guide-list" aria-live="polite"></div>',
+                    '<div class="section-add"><select class="section-add-select" aria-label="Choose a guide to add or move"></select><button class="btn small section-add-button" type="button" disabled>Add guide here</button></div>',
+                    '<details class="advanced"><summary>Advanced section settings</summary><div class="advanced-body">',
+                    '<label>Stable section ID<input class="section-id"></label>',
+                    '<label>Icon<input class="section-icon" placeholder="leaf"></label>',
+                    '<label>Guide IDs<textarea class="section-lessons" aria-label="Guide IDs"></textarea></label>',
+                    '</div></details>'
+                ].join('');
+                const existingIds = new Set(readSectionRows().map(item => item.id));
+                let next = 1;
+                while (existingIds.has('section-' + next)) next++;
+                row.querySelector('.section-id').value = section && section.id || 'section-' + next;
+                const savedJourney = state.journeys.find(item => item.id === state.selectedJourneyId);
+                const isExistingSection = !!(section && section.id && savedJourney &&
+                    (savedJourney.sections || []).some(item => item.id === section.id));
+                row.querySelector('.section-id').disabled = isExistingSection;
+                row.querySelector('.section-title').value = section && section.title || 'New section';
+                row.querySelector('.section-subtitle').value = section && section.subtitle || '';
+                row.querySelector('.section-icon').value = section && section.icon || 'leaf';
+                row.querySelector('.section-lessons').value = section && Array.isArray(section.lessonIds) ? section.lessonIds.join('\n') : '';
+                row.querySelector('.remove').addEventListener('click', () => {
+                    const ids = splitLines(row.querySelector('.section-lessons').value);
+                    if (ids.length && !window.confirm('Delete this section? Its guides will remain available, but you must place them in another section before saving.')) return;
+                    row.remove();
+                    commitSectionEdit();
+                });
+                row.querySelector('.section-up').addEventListener('click', () => {
+                    if (row.previousElementSibling) sectionsContainer.insertBefore(row, row.previousElementSibling);
+                    commitSectionEdit();
+                    row.querySelector('.section-up').focus();
+                });
+                row.querySelector('.section-down').addEventListener('click', () => {
+                    if (row.nextElementSibling) sectionsContainer.insertBefore(row.nextElementSibling, row);
+                    commitSectionEdit();
+                    row.querySelector('.section-down').focus();
+                });
+                const add = row.querySelector('.section-add-select');
+                add.addEventListener('change', () => { row.querySelector('.section-add-button').disabled = !add.value; });
+                row.querySelector('.section-add-button').addEventListener('click', () => {
+                    if (add.value) moveGuideToSection(add.value, row);
+                });
+                row.addEventListener('input', () => {
+                    syncAdvancedJsonFromDraft();
+                    updateOrganizationWarnings();
+                });
+                row.querySelectorAll('.section-title, .section-lessons').forEach(input => input.addEventListener('change', commitSectionEdit));
                 sectionsContainer.appendChild(row);
+                refreshSectionControls();
+                return row;
             }
 
             function renderJourneyList() {
@@ -3067,6 +3298,7 @@
                 $("journey-id").removeAttribute("title");
                 $("journey-form").reset();
                 $("journey-published").checked = true;
+                renderFinishAction({});
                 $("delete-journey").hidden = true;
                 state.organizationDraft = normalizeJourney({
                     schemaVersion: 1,
@@ -3100,6 +3332,7 @@
                 $("journey-description").value = journey.description || "";
                 $("journey-default").checked = journey.id === state.defaultJourneyId;
                 $("journey-published").checked = journey.published !== false;
+                fillFinishCard(journey);
                 state.organizationDraft = normalizeJourney(journey);
                 $("delete-journey").hidden = false;
                 sectionsContainer.innerHTML = "";
@@ -3141,6 +3374,7 @@
                     $("journey-title").value = draft.title || "";
                     $("journey-description").value = draft.description || "";
                     $("journey-published").checked = draft.published !== false;
+                    fillFinishCard(draft);
                     state.organizationDraft = draft;
                     sectionsContainer.innerHTML = "";
                     draft.sections.forEach(createSectionRow);
@@ -3165,6 +3399,7 @@
                     id,
                     title: $("journey-title").value.trim(),
                     description: $("journey-description").value.trim(),
+                    finishCard: readFinishCard(),
                     published: $("journey-published").checked,
                     sections,
                     listThemes: clone(state.organizationDraft.listThemes).map((theme, index) => ({ ...theme, order: index })),
@@ -3240,6 +3475,9 @@
                     const phaseKeys = phasesByLesson.get(lesson.slug) || [];
                     const sectionKey = sectionByLesson.get(lesson.slug) || "";
                     const changed = lesson.listThemeKey !== (theme && theme.key || "") ||
+                        (lesson.listThemeLabel || "") !== (theme && theme.label || "") ||
+                        (lesson.listThemeSubtitle || "") !== (theme && theme.subtitle || "") ||
+                        (lesson.listThemeIcon || "") !== (theme && theme.icon || "") ||
                         JSON.stringify(lesson.phaseKeys || []) !== JSON.stringify(phaseKeys) ||
                         (lesson.journeySectionKey || "") !== sectionKey;
                     if (!changed) return;
@@ -3968,6 +4206,33 @@
                 }
             }
 
+            function initializeOrganizationViewTabs() {
+                const tabs = Array.from(document.querySelectorAll('.organization-view-tab'));
+                const select = (tab) => {
+                    tabs.forEach(item => {
+                        const selected = item === tab;
+                        item.setAttribute('aria-selected', String(selected));
+                        item.tabIndex = selected ? 0 : -1;
+                        $(item.getAttribute('aria-controls')).hidden = !selected;
+                    });
+                };
+                tabs.forEach((tab, index) => {
+                    tab.addEventListener('click', () => select(tab));
+                    tab.addEventListener('keydown', event => {
+                        let next;
+                        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+                        else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+                        else if (event.key === 'Home') next = 0;
+                        else if (event.key === 'End') next = tabs.length - 1;
+                        else return;
+                        event.preventDefault();
+                        select(tabs[next]);
+                        tabs[next].focus();
+                    });
+                });
+            }
+            initializeOrganizationViewTabs();
+
             document.querySelectorAll(".guides-cms-tab").forEach((tab) => {
                 tab.addEventListener("click", () => {
                     document.querySelectorAll(".guides-cms-tab").forEach((item) => item.classList.toggle("active", item === tab));
@@ -4017,7 +4282,7 @@
             });
             $("journey-form").addEventListener("submit", handleJourneySave);
             $("delete-journey").addEventListener("click", handleJourneyDelete);
-            $("add-section").addEventListener("click", () => createSectionRow());
+            $("add-section").addEventListener("click", () => { const row = createSectionRow(); commitSectionEdit(); row.querySelector(".section-title").focus(); });
             $("add-theme").addEventListener("click", () => {
                 if (!state.organizationDraft) return;
                 let index = state.organizationDraft.listThemes.length + 1;
@@ -4065,7 +4330,7 @@
                     syncAdvancedJsonFromDraft();
                 } catch (error) { setStatus($("journey-status"), error.message, "error"); }
             });
-            ["journey-id", "journey-title", "journey-description", "journey-published"].forEach((id) => {
+            ["journey-id", "journey-title", "journey-description", "journey-published", "finish-enabled", "finish-title", "finish-text", "finish-listTitle", "finish-listText", "finish-buttonLabel"].forEach((id) => {
                 $(id).addEventListener("input", syncAdvancedJsonFromDraft);
                 $(id).addEventListener("change", syncAdvancedJsonFromDraft);
             });
