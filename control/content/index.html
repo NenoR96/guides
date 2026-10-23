@@ -719,6 +719,14 @@
             background: #fafbfc;
         }
 
+        .milestone-tabs { display: flex; flex-direction: row; gap: 6px; }
+        .milestone-tab { flex: 1; padding: 10px; border: 1px solid #dde1e7; border-radius: 6px; background: #eef1f6; }
+        .milestone-tab[aria-selected="true"] { background: #fff; color: #245db3; border-color: #245db3; }
+        .milestone-tab:focus-visible { outline: 2px solid #356fd0; outline-offset: 2px; }
+        .milestone-items { display: grid; gap: 8px; margin-bottom: 10px; }
+        .milestone-item { display: flex; gap: 8px; align-items: center; }
+        .milestone-item input { flex: 1; min-width: 0; }
+
         .theme-card.dragging,
         .theme-lesson.dragging {
             opacity: .45;
@@ -1012,6 +1020,21 @@
                 grid-column: auto;
             }
         }
+        .translation-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+        .translation-tabs button { padding: 9px 12px; border: 1px solid #dde1e7; border-radius: 6px; background: #eef1f6; color: #344054; cursor: pointer; }
+        .translation-tabs button[aria-selected="true"] { background: #fff; color: #245db3; border-color: #245db3; }
+        .translation-tabs button:focus-visible { outline: 2px solid #356fd0; outline-offset: 2px; }
+        .translation-panel[hidden] { display: none; }
+        .translation-panel .field { margin-bottom: 16px; }
+        .guide-icon-list { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+        .guide-icon-row { display: flex; align-items: center; gap: 16px; padding: 16px; border: 1px solid #e1e5eb; border-radius: 10px; background: #fff; }
+        .guide-icon-preview { width: 64px; height: 64px; flex: 0 0 64px; border: 1px solid #e1e5eb; border-radius: 50%; display: grid; place-items: center; background: #fff; }
+        .guide-icon-preview img { width: 44px; height: 44px; object-fit: contain; }
+        .guide-icon-copy { flex: 1; min-width: 0; }
+        .guide-icon-copy strong { display: block; margin-bottom: 4px; font-size: 14px; }
+        .guide-icon-copy small { display: block; color: #667085; line-height: 1.5; }
+        .guide-icon-copy .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        @media (max-width: 380px) { .guide-icon-row { gap: 12px; padding: 12px; } }
     </style>
 </head>
 
@@ -1105,6 +1128,11 @@
                                 <label><input id="lesson-published" type="checkbox" checked> Published</label>
                                 <label><input id="lesson-premium" type="checkbox"> Premium</label>
                             </div>
+                            <div class="field full">
+                                <label>Guide icons</label>
+                                <small>Upload an Unread icon and one shared Start / Read icon with transparent backgrounds. Background colours are applied automatically. Save the guide to apply changes.</small>
+                                <div id="lesson-state-icons" class="guide-icon-list"></div>
+                            </div>
                             <details class="advanced field full">
                                 <summary>Advanced guide settings</summary>
                                 <div class="form-grid advanced-body">
@@ -1113,10 +1141,7 @@
                                         <input id="lesson-slug" placeholder="blw-o-que-e">
                                         <small>Used by progress and references. Locked after the guide is created.</small>
                                     </div>
-                                    <div class="field">
-                                        <label for="lesson-icon">Icon ID</label>
-                                        <input id="lesson-icon" placeholder="book">
-                                    </div>
+                                    <input id="lesson-icon" type="hidden">
                                     <div class="field full">
                                         <label for="lesson-tag">Fine-grained tag</label>
                                         <input id="lesson-tag" placeholder="Fundamentos">
@@ -1389,8 +1414,8 @@
 
         <section class="guides-cms-panel" id="translations-panel">
             <div class="card">
-                <div class="card-header"><h2>Quiz translations</h2></div>
-                <p class="description">Edit shared quiz messages. Leave a field empty to keep the current shell text. Keep {count} in messages that include a number. Saved changes apply to all quizzes.</p>
+                <div class="card-header"><h2>Guides and quiz translations</h2></div>
+                <p class="description">Choose a screen to edit its labels and messages. Shared labels apply across screens. Save translations saves changes from every tab. Leave a field empty to use the shell text or default shown below. Preserve placeholders such as {count}, {hits}, {total}, and {title}. Guide articles, journey organization, and quiz questions are edited in their content tabs.</p>
                 <form id="translations-form">
                     <fieldset id="translations-fields" disabled style="border:0;padding:0;margin:0"></fieldset>
                     <div class="actions">
@@ -1730,6 +1755,9 @@
                         callOutAnchor: lesson.callOutAnchor || "",
                         tag: lesson.tag || "",
                         icon: lesson.icon || "",
+                        iconUnread: lesson.iconUnread || "",
+                        iconStart: lesson.iconStart || "",
+                        iconRead: lesson.iconRead || "",
                         readTime: lesson.readTime || "",
                         listThemeKey: lesson.listThemeKey || "",
                         journeySectionKey: lesson.journeySectionKey || "",
@@ -1821,6 +1849,9 @@
                     callOutAnchor: primaryCallOut.anchor,
                     tag: String(value.tag || "").trim(),
                     icon: String(value.icon || "").trim(),
+                    iconUnread: String(value.iconUnread || "").trim(),
+                    iconStart: String(value.iconStart || "").trim(),
+                    iconRead: String(value.iconRead || "").trim(),
                     readTime: String(value.readTime || "").trim(),
                     phaseKeys: phaseKeys.map(String),
                     journeySectionKey,
@@ -2521,13 +2552,68 @@
                 if (Array.from(select.options).some((option) => option.value === selected)) select.value = selected;
             }
 
+            const guideIconStates = [
+                { key: "iconUnread", label: "Unread", color: "#FFFFFF" },
+                { key: "iconStart", label: "Start / Read", color: "#F9A247" }
+            ];
+            let iconFormVersion = 0;
+            function updateStateIconPreviews() {
+                guideIconStates.forEach(({ key }) => {
+                    const input = $("lesson-" + key);
+                    const url = input.value.trim() || $("lesson-icon").value.trim();
+                    const preview = $("preview-" + key);
+                    preview.hidden = !/^https?:\/\//i.test(url);
+                    if (!preview.hidden) preview.src = url;
+                    else preview.removeAttribute("src");
+                    $("remove-" + key).hidden = !input.value;
+                });
+            }
+            guideIconStates.forEach(({ key, label, color }) => {
+                const field = document.createElement("div");
+                field.className = "guide-icon-row";
+                const description = { iconUnread: "Not read yet · White background", iconStart: "Upload one transparent icon. Start uses an orange background; Read uses green." }[key];
+                field.innerHTML =
+                    '<input type="hidden" id="lesson-' + key + '">' +
+                    '<div class="guide-icon-preview" style="background:' + color + '">' +
+                    '<img id="preview-' + key + '" alt="' + label + ' icon preview" hidden></div>' +
+                    '<div class="guide-icon-copy"><strong>' + label + ' icon</strong><small>' + description + '</small>' +
+                    '<div class="inline-actions"><button type="button" class="btn small" id="upload-' + key + '">Upload / choose icon</button>' +
+                    '<button type="button" class="btn small" id="remove-' + key + '" hidden>Remove image</button></div></div>';
+                $("lesson-state-icons").appendChild(field);
+                $("remove-" + key).addEventListener("click", () => {
+                    $("lesson-" + key).value = "";
+                    updateStateIconPreviews();
+                });
+                $("upload-" + key).addEventListener("click", () => {
+                    if (!buildfire.imageLib || !buildfire.imageLib.showDialog) {
+                        setStatus($("lesson-status"), "Image uploads are available in the BuildFire control panel.", "error");
+                        return;
+                    }
+                    const version = iconFormVersion;
+                    buildfire.imageLib.showDialog({ multiSelection: false, showIcons: false }, (error, result) => {
+                        if (version !== iconFormVersion) return;
+                        if (error) return setStatus($("lesson-status"), errorMessage(error), "error");
+                        const file = result && result.selectedFiles && result.selectedFiles[0];
+                        if (!file) return;
+                        const url = typeof file === "string" ? file : file.url;
+                        if (!/^https?:\/\//i.test(url || "")) return setStatus($("lesson-status"), "Please choose an uploaded image.", "error");
+                        $("lesson-" + key).value = url;
+                        updateStateIconPreviews();
+                    });
+                });
+            });
+
             function clearLessonForm(showEditor, hideSelector) {
+                iconFormVersion++;
+                guideIconStates.forEach(({ key }) => { $("lesson-" + key).value = ""; });
                 $("lesson-editor").hidden = showEditor === false;
                 $("lesson-selector").hidden = hideSelector === true;
                 state.selectedLessonId = null;
                 $("lesson-slug").disabled = false;
                 $("lesson-slug").removeAttribute("title");
-                $("lesson-form").reset();
+                $('lesson-icon').value = '';
+                $('lesson-form').reset();
+                updateStateIconPreviews();
                 $("lesson-published").checked = true;
                 $("lesson-form-title").textContent = "New guide";
                 $("lesson-source").value = "";
@@ -2546,6 +2632,8 @@
             function selectLesson(recordId, shouldScroll) {
                 const lesson = state.lessons.find((item) => item._recordId === recordId);
                 if (!lesson) return;
+                iconFormVersion++;
+                guideIconStates.forEach(({ key }) => { $("lesson-" + key).value = lesson[key] || (key === "iconStart" ? lesson.iconRead : "") || ""; });
                 $("lesson-editor").hidden = false;
                 $("lesson-selector").hidden = false;
                 state.selectedLessonId = recordId;
@@ -2558,6 +2646,7 @@
                 $("lesson-title").value = lesson.title || "";
                 $("lesson-tag").value = lesson.tag || "";
                 $("lesson-icon").value = lesson.icon || "";
+                updateStateIconPreviews();
                 $("lesson-read-time").value = lesson.readTime || "";
                 $("lesson-phases").value = Array.isArray(lesson.phaseKeys) ? lesson.phaseKeys.join(", ") : "";
                 $("lesson-source").value = lesson.migratedFrom || "Created in CMS";
@@ -2618,6 +2707,9 @@
                     callOutAnchor: primaryCallOut.anchor,
                     tag: $("lesson-tag").value.trim(),
                     icon: $("lesson-icon").value.trim(),
+                    iconUnread: $("lesson-iconUnread").value.trim(),
+                    iconStart: $("lesson-iconStart").value.trim(),
+                    iconRead: $("lesson-iconStart").value.trim(),
                     readTime: $("lesson-read-time").value.trim(),
                     phaseKeys,
                     journeySectionKey: $("lesson-placement").value,
@@ -3105,30 +3197,128 @@
                     const source = state.organizationDraft.milestones[key] || {};
                     const card = document.createElement("details");
                     card.className = "milestone-card";
-                    card.innerHTML = [
-                        '<summary>' + AGE_LABELS[key] + ' months</summary>',
-                        '<div class="form-grid milestone-grid">',
-                        '<div class="field full"><label>Title</label><input class="milestone-title"></div>',
-                        '<div class="field"><label>What to expect — one item per line</label><textarea class="milestone-expect"></textarea></div>',
-                        '<div class="field"><label>Remember — one item per line</label><textarea class="milestone-remember"></textarea></div>',
-                        '</div>'
-                    ].join("");
-                    card.querySelector(".milestone-title").value = source.title || "";
-                    card.querySelector(".milestone-expect").value = milestoneItems(source.esperar, source.expectHtml).join("\n");
-                    card.querySelector(".milestone-remember").value = milestoneItems(source.lembrese, source.rememberHtml).join("\n");
+                    card.innerHTML = '<summary>' + AGE_LABELS[key] + ' months</summary>' +
+                        '<div class="form-grid milestone-grid"><div class="field full"><label>Title<input class="milestone-title"></label></div>' +
+                        '<div class="guide-icon-row field full"><input class="milestone-icon" type="hidden"><div class="guide-icon-preview"><img class="milestone-icon-preview" alt="Milestone icon preview" hidden></div><div class="guide-icon-copy"><strong>Milestone icon</strong><div class="inline-actions"><button type="button" class="btn small milestone-icon-upload">Upload / choose icon</button><button type="button" class="btn small milestone-icon-remove" hidden>Remove image</button></div></div></div>' +
+                        '<div class="milestone-tabs field full" role="tablist" aria-label="Milestone content"></div>' +
+                        '<div class="milestone-panels field full"></div></div>';
+                    const title = card.querySelector(".milestone-title");
+                    title.value = source.title || "";
+                    const icon = card.querySelector('.milestone-icon');
+                    icon.value = source.icon || '';
+                    const updateIconPreview = () => {
+                        const preview = card.querySelector('.milestone-icon-preview');
+                        preview.hidden = !/^https?:\/\//i.test(icon.value);
+                        if (preview.hidden) preview.removeAttribute('src');
+                        else preview.src = icon.value;
+                        card.querySelector('.milestone-icon-remove').hidden = preview.hidden;
+                    };
+                    updateIconPreview();
+                    card.querySelector('.milestone-icon-remove').addEventListener('click', () => {
+                        icon.value = '';
+                        updateIconPreview();
+                        update();
+                    });
+                    card.querySelector('.milestone-icon-upload').addEventListener('click', () => {
+                        if (!buildfire.imageLib || !buildfire.imageLib.showDialog) {
+                            return setStatus($('journey-status'), 'Image uploads are available in the BuildFire control panel.', 'error');
+                        }
+                        buildfire.imageLib.showDialog({ multiSelection: false, showIcons: false }, (error, result) => {
+                            if (!card.isConnected) return;
+                            if (error) return setStatus($('journey-status'), errorMessage(error), 'error');
+                            const file = result && result.selectedFiles && result.selectedFiles[0];
+                            if (!file) return;
+                            const url = typeof file === 'string' ? file : file.url;
+                            if (!/^https?:\/\//i.test(url || '')) return setStatus($('journey-status'), 'Please choose an uploaded image.', 'error');
+                            icon.value = url;
+                            updateIconPreview();
+                            update();
+                        });
+                    });
+                    const groups = [
+                        { name: "esperar", label: "What to expect", items: milestoneItems(source.esperar, source.expectHtml) },
+                        { name: "lembrese", label: "Remember", items: milestoneItems(source.lembrese, source.rememberHtml) }
+                    ];
                     const update = () => {
-                        const esperar = splitLines(card.querySelector(".milestone-expect").value);
-                        const lembrese = splitLines(card.querySelector(".milestone-remember").value);
+                        const values = groups.map(group => Array.from(group.list.querySelectorAll("input"))
+                            .map(input => input.value.trim()).filter(Boolean));
                         state.organizationDraft.milestones[key] = {
-                            title: card.querySelector(".milestone-title").value.trim(),
-                            esperar,
-                            lembrese,
-                            expectHtml: listHtml(esperar),
-                            rememberHtml: listHtml(lembrese)
+                            ...source,
+                            title: title.value.trim(),
+                            icon: icon.value.trim(),
+                            esperar: values[0],
+                            lembrese: values[1],
+                            expectHtml: listHtml(values[0]),
+                            rememberHtml: listHtml(values[1])
                         };
                         syncAdvancedJsonFromDraft();
                     };
-                    card.querySelectorAll("input, textarea").forEach((input) => input.addEventListener("input", update));
+                    const activate = (index, focus) => {
+                        groups.forEach((group, i) => {
+                            group.tab.setAttribute("aria-selected", String(i === index));
+                            group.tab.tabIndex = i === index ? 0 : -1;
+                            group.panel.hidden = i !== index;
+                        });
+                        if (focus) groups[index].tab.focus();
+                    };
+                    groups.forEach((group, index) => {
+                        const id = "milestone-" + key + "-" + group.name;
+                        const tab = document.createElement("button");
+                        tab.type = "button";
+                        tab.className = "milestone-tab";
+                        tab.id = id + "-tab";
+                        tab.setAttribute("role", "tab");
+                        tab.setAttribute("aria-controls", id + "-panel");
+                        tab.textContent = group.label;
+                        group.tab = tab;
+                        const panel = document.createElement("div");
+                        panel.id = id + "-panel";
+                        panel.setAttribute("role", "tabpanel");
+                        panel.setAttribute("aria-labelledby", tab.id);
+                        group.panel = panel;
+                        group.list = document.createElement("div");
+                        group.list.className = "milestone-items";
+                        const add = document.createElement("button");
+                        add.type = "button";
+                        add.className = "btn small";
+                        add.textContent = "Add item";
+                        const addItem = (value, focus) => {
+                            const row = document.createElement("div");
+                            row.className = "milestone-item";
+                            const input = document.createElement("input");
+                            input.type = "text";
+                            input.value = value;
+                            input.setAttribute("aria-label", group.label + " item");
+                            input.addEventListener("input", update);
+                            const remove = document.createElement("button");
+                            remove.type = "button";
+                            remove.className = "btn small danger";
+                            remove.textContent = "Delete";
+                            remove.setAttribute("aria-label", "Delete " + group.label.toLowerCase() + " item");
+                            remove.addEventListener("click", () => {
+                                const next = row.nextElementSibling || row.previousElementSibling;
+                                row.remove();
+                                update();
+                                (next ? next.querySelector("input") : add).focus();
+                            });
+                            row.append(input, remove);
+                            group.list.appendChild(row);
+                            if (focus) input.focus();
+                        };
+                        group.items.forEach(value => addItem(value, false));
+                        add.addEventListener("click", () => addItem("", true));
+                        panel.append(group.list, add);
+                        tab.addEventListener("click", () => activate(index, false));
+                        tab.addEventListener("keydown", event => {
+                            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                            event.preventDefault();
+                            activate(event.key === "Home" ? 0 : event.key === "End" ? groups.length - 1 : (index + 1) % groups.length, true);
+                        });
+                        card.querySelector(".milestone-tabs").appendChild(tab);
+                        card.querySelector(".milestone-panels").appendChild(panel);
+                    });
+                    activate(0, false);
+                    title.addEventListener("input", update);
                     container.appendChild(card);
                 });
             }
@@ -3233,6 +3423,7 @@
                     '<div class="section-heading"><strong class="section-number"></strong><button class="btn small section-up" type="button" aria-label="Move section up">Up</button><button class="btn small section-down" type="button" aria-label="Move section down">Down</button><button class="btn small remove" type="button">Delete section</button></div>',
                     '<label>Section title<input class="section-title" placeholder="For example: Getting ready"></label>',
                     '<label>Description (optional)<input class="section-subtitle" placeholder="A short introduction"></label>',
+                    '<div class="guide-icon-row"><div class="guide-icon-preview"><img class="section-icon-preview" alt="Section icon preview" hidden></div><div class="guide-icon-copy"><strong>Section icon</strong><div class="inline-actions"><button type="button" class="btn small section-icon-upload">Upload / choose icon</button><button type="button" class="btn small section-icon-remove" hidden>Remove image</button></div></div></div>',
                     '<div class="section-guide-list" aria-live="polite"></div>',
                     '<div class="section-add"><select class="section-add-select" aria-label="Choose a guide to add or move"></select><button class="btn small section-add-button" type="button" disabled>Add guide here</button></div>',
                     '<details class="advanced"><summary>Advanced section settings</summary><div class="advanced-body">',
@@ -3252,6 +3443,38 @@
                 row.querySelector('.section-title').value = section && section.title || 'New section';
                 row.querySelector('.section-subtitle').value = section && section.subtitle || '';
                 row.querySelector('.section-icon').value = section && section.icon || 'leaf';
+                const iconInput = row.querySelector('.section-icon');
+                const updateIconPreview = () => {
+                    const url = iconInput.value.trim();
+                    const preview = row.querySelector('.section-icon-preview');
+                    preview.hidden = !/^https?:\/\//i.test(url);
+                    if (preview.hidden) preview.removeAttribute('src');
+                    else preview.src = url;
+                    row.querySelector('.section-icon-remove').hidden = preview.hidden;
+                };
+                iconInput.addEventListener('input', updateIconPreview);
+                row.querySelector('.section-icon-remove').addEventListener('click', () => {
+                    iconInput.value = 'leaf';
+                    updateIconPreview();
+                    commitSectionEdit();
+                });
+                row.querySelector('.section-icon-upload').addEventListener('click', () => {
+                    if (!buildfire.imageLib || !buildfire.imageLib.showDialog) {
+                        return setStatus($('journey-status'), 'Image uploads are available in the BuildFire control panel.', 'error');
+                    }
+                    buildfire.imageLib.showDialog({ multiSelection: false, showIcons: false }, (error, result) => {
+                        if (!row.isConnected) return;
+                        if (error) return setStatus($('journey-status'), errorMessage(error), 'error');
+                        const file = result && result.selectedFiles && result.selectedFiles[0];
+                        if (!file) return;
+                        const url = typeof file === 'string' ? file : file.url;
+                        if (!/^https?:\/\//i.test(url || '')) return setStatus($('journey-status'), 'Please choose an uploaded image.', 'error');
+                        iconInput.value = url;
+                        updateIconPreview();
+                        commitSectionEdit();
+                    });
+                });
+                updateIconPreview();
                 row.querySelector('.section-lessons').value = section && Array.isArray(section.lessonIds) ? section.lessonIds.join('\n') : '';
                 row.querySelector('.remove').addEventListener('click', () => {
                     const ids = splitLines(row.querySelector('.section-lessons').value);
@@ -3446,8 +3669,6 @@
                 });
                 const duplicate = Array.from(themeAssignments).find(([, count]) => count > 1);
                 if (duplicate) throw new Error("Guide is assigned to more than one category: " + lessonTitle(duplicate[0]));
-                const uncategorized = state.lessons.filter((lesson) => lesson.published !== false && !themeAssignments.has(lesson.slug));
-                if (uncategorized.length) throw new Error("Assign every published guide to a category. Missing: " + uncategorized.map((lesson) => lesson.title || lesson.slug).join(", "));
                 const sectionAssignments = new Map();
                 journey.sections.forEach((section) => {
                     if (!section.id || !section.title) throw new Error("Every curriculum section needs an ID and title.");
@@ -3458,8 +3679,14 @@
                 });
                 const repeatedSectionLesson = Array.from(sectionAssignments).find(([, count]) => count > 1);
                 if (repeatedSectionLesson) throw new Error("Guide appears in more than one curriculum section: " + lessonTitle(repeatedSectionLesson[0]));
-                const unplaced = state.lessons.filter((lesson) => lesson.published !== false && !sectionAssignments.has(lesson.slug));
-                if (unplaced.length) throw new Error("Choose journey placement for every published guide. Missing: " + unplaced.map((lesson) => lesson.title || lesson.slug).join(", "));
+                const placementErrors = state.lessons.filter((lesson) => lesson.published !== false).flatMap((lesson) => {
+                    const missing = [];
+                    if (!themeAssignments.has(lesson.slug)) missing.push("category");
+                    if (!sectionAssignments.has(lesson.slug)) missing.push("journey placement");
+                    const label = lesson.title ? lesson.title + " (" + lesson.slug + ")" : lesson.slug;
+                    return missing.length ? [label + ": missing " + missing.join(" and ")] : [];
+                });
+                if (placementErrors.length) throw new Error("Cannot save organization. " + placementErrors.join("; ") + ".");
                 Object.entries(journey.phaseHighlights).forEach(([age, ids]) => {
                     if (!AGE_KEYS.includes(age) || !Array.isArray(ids)) throw new Error("Invalid age highlight entry: " + age);
                     const missing = ids.find((id) => !known.has(id));

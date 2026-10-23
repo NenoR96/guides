@@ -26,6 +26,13 @@
 	let runtimeState = null;
 	let startupDeepLink = null;
 
+	function loadingError(operation, error) {
+		let detail;
+		try { detail = error && error.message ? error.message : JSON.stringify(error); }
+		catch (_) { detail = String(error); }
+		return new Error(operation + ': ' + (detail || String(error)));
+	}
+
 	function deepLinkFromValue(value) {
 		return Contract ? Contract.normalizeDeepLink(value) : null;
 	}
@@ -65,7 +72,7 @@
 	function getData(tag) {
 		return new Promise((resolve, reject) => {
 			buildfire.datastore.get(tag, (error, result) => {
-				if (error) reject(error);
+				if (error) reject(loadingError('datastore.get(' + tag + ')', error));
 				else resolve(result && result.data ? result.data : null);
 			});
 		});
@@ -74,7 +81,7 @@
 	function searchPage(tag, page) {
 		return new Promise((resolve, reject) => {
 			buildfire.datastore.search({ page, pageSize: PAGE_SIZE }, tag, (error, result) => {
-				if (error) reject(error);
+				if (error) reject(loadingError('datastore.search(' + tag + ', page ' + page + ')', error));
 				else resolve(Array.isArray(result) ? result : ((result && result.result) || []));
 			});
 		});
@@ -559,7 +566,7 @@
 				window.removeEventListener('message', onMessage);
 				app.classList.remove('contract-shell');
 				console.error('Uploaded guide shell did not complete the contract handshake; using the built-in renderer.');
-				renderBuiltIn(app, state, 'The uploaded design could not start, so a safe fallback is shown.');
+				renderBuiltIn(app, state, global.GuidesTranslations.get(state.translations, 'fallbackNotice'));
 			}
 		}, 5000);
 	}
@@ -573,6 +580,7 @@
 	}
 
 	function renderBuiltIn(app, state, notice) {
+		const label = key => global.GuidesTranslations.get(state.translations, key);
 		const published = state.lessons.filter((lesson) => lesson && lesson.slug && lesson.published !== false);
 		const byId = new Map(published.map((lesson) => [lesson.slug, lesson]));
 		const configured = state.activeJourney && Array.isArray(state.activeJourney.sections) ? state.activeJourney.sections : [];
@@ -583,20 +591,35 @@
 			return { ...section, lessons };
 		});
 		const remaining = published.filter((lesson) => !seen.has(lesson.slug));
-		if (remaining.length) sections.push({ id: 'library', title: sections.length ? 'More guides' : 'All guides', lessons: remaining });
+		if (remaining.length) sections.push({ id: 'library', title: label(sections.length ? 'fallbackMoreGuides' : 'fallbackAllGuides'), lessons: remaining });
 		let activeScreen = 'home';
+
+		function guideAppearance(lesson) {
+			const next = sections.flatMap(section => section.lessons).find(item => !state.completed.has(item.slug));
+			const status = state.completed.has(lesson.slug) ? 'read' : next && next.slug === lesson.slug ? 'start' : 'unread';
+			const key = { read: 'iconRead', start: 'iconStart', unread: 'iconUnread' }[status];
+			const icon = /^https?:\/\//i.test(lesson[key] || '') ? lesson[key] : lesson.icon;
+			const background = { read: '#1ABC9B', start: '#F9A247', unread: '#FFFFFF' }[status];
+			const image = /^https?:\/\//i.test(icon || '') ? '<img src="' + escapeHtml(icon) + '" alt="" width="28" height="28" style="object-fit:contain">' : (status === 'read' ? '✓' : '•');
+			return { background, icon: '<span class="lesson-mark" style="background:' + background + '">' + image + '</span>', label: status === 'start' ? label('guideStart') : '' };
+		}
+
+		function guideRow(lesson) {
+			const appearance = guideAppearance(lesson);
+			return '<button class="lesson" style="background:' + appearance.background + '" data-lesson-id="' + escapeHtml(lesson.slug) + '">' + appearance.icon + '<span class="lesson-copy"><strong>' + escapeHtml(lesson.title) + '</strong><span>' + escapeHtml(lesson.readTime || '') + '</span></span>' + (appearance.label ? '<span class="badge">' + escapeHtml(appearance.label) + '</span>' : '') + '</button>';
+		}
 
 		function home() {
 			activeScreen = 'home';
 			const completedCount = published.filter((lesson) => state.completed.has(lesson.slug)).length;
 			app.innerHTML = (notice ? '<div style="padding:10px 14px;background:#fff4d6;color:#704f00;font:13px sans-serif">' + escapeHtml(notice) + '</div>' : '') +
-                '<section><header class="home-header"><div class="home-header-inner"><div class="eyebrow">Your journey</div><h1>' +
-                escapeHtml(state.activeJourney && state.activeJourney.title || 'Interactive guides') + '</h1><p>' +
-                escapeHtml(state.activeJourney && state.activeJourney.description || 'Explore all available guides.') + '</p></div></header><div class="content">' +
-                '<div class="progress-card"><div class="progress-row"><span>Journey progress</span><span>' + completedCount + ' of ' + published.length +
+                '<section><header class="home-header"><div class="home-header-inner"><div class="eyebrow">' + escapeHtml(label('fallbackYourJourney')) + '</div><h1>' +
+                escapeHtml(state.activeJourney && state.activeJourney.title || label('fallbackTitle')) + '</h1><p>' +
+                escapeHtml(state.activeJourney && state.activeJourney.description || label('fallbackDescription')) + '</p></div></header><div class="content">' +
+                '<div class="progress-card"><div class="progress-row"><span>' + escapeHtml(label('fallbackProgress')) + '</span><span>' + completedCount + ' ' + escapeHtml(label('fallbackOf')) + ' ' + published.length +
                 '</span></div><div class="progress-track"><div class="progress-fill" style="width:' + (published.length ? Math.round(completedCount / published.length * 100) : 0) + '%"></div></div></div>' +
-                sections.map((section) => '<section class="journey-section"><div class="section-title"><span class="section-icon">•</span><span class="section-heading"><span>' + escapeHtml(section.title || section.id) + '</span></span></div><div class="lesson-list">' +
-                    section.lessons.map((lesson) => '<button class="lesson' + (state.completed.has(lesson.slug) ? ' done' : '') + '" data-lesson-id="' + escapeHtml(lesson.slug) + '"><span class="lesson-mark">' + (state.completed.has(lesson.slug) ? '✓' : '•') + '</span><span class="lesson-copy"><strong>' + escapeHtml(lesson.title) + '</strong><span>' + escapeHtml(lesson.readTime || '') + '</span></span><span class="lesson-arrow">›</span></button>').join('') + '</div></section>').join('') + '</div></section>';
+                sections.map((section) => '<section class="journey-section"><div class="section-title"><span class="section-icon">' + (/^https?:\/\//i.test(section.icon || '') ? '<img src="' + escapeHtml(section.icon) + '" alt="" width="24" height="24" style="object-fit:contain">' : '•') + '</span><span class="section-heading"><span>' + escapeHtml(section.title || section.id) + '</span></span></div><div class="lesson-list">' +
+                    section.lessons.map(guideRow).join('') + '</div></section>').join('') + '</div></section>';
 			app.querySelectorAll('[data-lesson-id]').forEach((button) => button.addEventListener('click', () => reader(button.dataset.lessonId)));
 		}
 
@@ -604,7 +627,7 @@
 			const lesson = byId.get(slug);
 			if (!lesson) return home();
 			activeScreen = 'reader';
-			app.innerHTML = '<article class="reader"><nav class="reader-nav"><button class="back" id="runtime-back">‹</button><strong>' + escapeHtml(lesson.title) + '</strong></nav><main class="reader-main"><div class="reader-meta">' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(' · ')) + '</div><h1>' + escapeHtml(lesson.title) + '</h1><div class="rich-text" id="runtime-content">' + (lesson.bodyHtml || '') + '</div><button class="complete' + (state.completed.has(slug) ? ' done' : '') + '" id="runtime-complete">' + (state.completed.has(slug) ? '✓ Completed' : 'Mark as completed') + '</button></main></article>';
+			app.innerHTML = '<article class="reader"><nav class="reader-nav"><button class="back" id="runtime-back" aria-label="' + escapeHtml(label('fallbackBack')) + '">‹</button><strong>' + escapeHtml(lesson.title) + '</strong></nav><main class="reader-main"><div class="reader-meta">' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(' · ')) + '</div><h1>' + guideAppearance(lesson).icon + escapeHtml(lesson.title) + '</h1><div class="rich-text" id="runtime-content">' + (lesson.bodyHtml || '') + '</div><button class="complete' + (state.completed.has(slug) ? ' done' : '') + '" id="runtime-complete">' + escapeHtml(label(state.completed.has(slug) ? 'fallbackCompleted' : 'fallbackComplete')) + '</button></main></article>';
 			document.getElementById('runtime-back').addEventListener('click', home);
 			document.getElementById('runtime-complete').addEventListener('click', async () => {
 				await setCompletion(state, 'guide', slug, !state.completed.has(slug)).catch(console.error);
@@ -627,7 +650,7 @@
 		}
 
 		if (!published.length) {
-			app.innerHTML = '<section class="state"><h1>No guides published</h1><p>Add and publish guides from the Content section.</p></section>';
+			app.innerHTML = '<section class="state"><h1>' + escapeHtml(label('fallbackEmptyTitle')) + '</h1><p>' + escapeHtml(label('fallbackEmptyMessage')) + '</p></section>';
 		} else {
 			home();
 			if (state.pendingDeepLink && state.pendingDeepLink.type === 'guide') {
@@ -649,7 +672,11 @@
 		const app = document.getElementById('app');
 		const state = createState();
 		runtimeState = state;
+		let stage = 'Loading guides, quizzes, journeys, release settings and uploaded HTML';
 		try {
+			state.translations = await getData(global.GuidesTranslations.tag).catch(() => ({}));
+			const loading = document.getElementById('guides-loading-label');
+			if (loading) loading.textContent = global.GuidesTranslations.get(state.translations, 'fallbackLoading');
 			const [lessons, quizzes, journeyData, releaseState, legacyHtml] = await Promise.all([
 				searchAll(TAGS.lessons),
 				searchAll(TAGS.quizzes),
@@ -658,6 +685,7 @@
 				getData(TAGS.legacyHtml),
 				loadProgress(state).catch((error) => useLocalProgressFallback(state, error))
 			]);
+			stage = 'Preparing guide content and subscriptions';
 			state.lessons = lessons;
 			state.quizzes = quizzes;
 			state.entitlements = await loadEntitlements(state.currentUser).catch((error) => {
@@ -667,10 +695,15 @@
 			state.journeyData = journeyData || { journeys: [] };
 			const publishedJourneys = (state.journeyData.journeys || []).filter((journey) => journey.published !== false);
 			state.activeJourney = publishedJourneys.find((journey) => journey.id === state.journeyData.defaultJourneyId) || publishedJourneys[0] || null;
-			const translations = await getData(global.GuidesTranslations.tag);
+			stage = 'Loading translations';
+			if (!global.GuidesTranslations) throw new Error('Missing GuidesTranslations: guides-translations.js did not load.');
+			const translations = state.translations;
+            stage = 'Loading the active release shell';
             const activeShell = await findActiveShell(releaseState);
+            stage = 'Applying translations to the shell';
             if (activeShell && typeof activeShell.html === 'string') activeShell.html = global.GuidesTranslations.apply(activeShell.html, translations);
             if (legacyHtml && typeof legacyHtml.html === 'string') legacyHtml.html = global.GuidesTranslations.apply(legacyHtml.html, translations);
+			stage = 'Rendering guide content';
 			state.activeRelease = activeShell;
 			if (activeShell && typeof activeShell.html === 'string' && shellContract(activeShell.html) >= 1) {
 				renderContractShell(app, activeShell.html, state);
@@ -683,7 +716,9 @@
 			}
 		} catch (error) {
 			console.error('Unable to start guide release runtime', error);
-			app.innerHTML = '<section class="state"><h1>Guides unavailable</h1><p>The content could not be loaded. Please try again.</p></section>';
+			const label = key => global.GuidesTranslations.get(state.translations, key);
+			app.innerHTML = '<section class="state"><h1>' + escapeHtml(label('fallbackErrorTitle')) + '</h1><p>' + escapeHtml(label('fallbackErrorMessage')) + '</p></section>';
+			console.error('Guides loading failed at ' + stage, error);
 		}
 	}
 

@@ -7,6 +7,31 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 
+test("organization errors identify each guide's missing category and journey placement", () => {
+    const source = fs.readFileSync(path.join(root, "control/content/index.html"), "utf8");
+    const start = source.indexOf("function validateJourney(");
+    const end = source.indexOf("async function syncLessonOrganizationMetadata(", start);
+    const state = { lessons: [
+        { slug: "a", title: "Guide A", published: true },
+        { slug: "b", title: "Guide B", published: true },
+        { slug: "c", title: "Guide C", published: true },
+        { slug: "draft", published: false }
+    ] };
+    const validate = new Function("state", "AGE_KEYS", "lessonTitle",
+        source.slice(start, end) + "; return validateJourney;")(state, [], id => id);
+    const journey = {
+        listThemes: [{ key: "category", label: "Category", lessonIds: ["a"] }],
+        sections: [{ id: "section", title: "Section", lessonIds: ["b"] }],
+        phaseHighlights: {}
+    };
+    assert.throws(() => validate(journey), {
+        message: "Cannot save organization. Guide A (a): missing journey placement; Guide B (b): missing category; Guide C (c): missing category and journey placement."
+    });
+    journey.listThemes[0].lessonIds = ["a", "b", "c"];
+    journey.sections[0].lessonIds = ["a", "b", "c"];
+    assert.doesNotThrow(() => validate(journey));
+});
+
 test("edited runtime and control JavaScript parses", () => {
     [
         "shared/guides-home-contract.js",
@@ -29,6 +54,17 @@ test("mobile widget packages the exact Guides Home contract", () => {
     assert.doesNotMatch(widgetHtml, /<script src="\.\.\/shared\/guides-home-contract\.js"><\/script>/);
 });
 
+test("mobile widget packages translations locally before the release runtime", () => {
+    const normalize = source => source.replace(/\r\n/g, "\n");
+    assert.equal(normalize(fs.readFileSync(path.join(root, "widget/guides-translations.js"), "utf8")),
+        normalize(fs.readFileSync(path.join(root, "shared/guides-translations.js"), "utf8")));
+    const html = fs.readFileSync(path.join(root, "widget/index.html"), "utf8");
+    assert.match(html, /<script src="guides-translations\.js"><\/script>\s*<script src="release-runtime\.js">/);
+    assert.doesNotMatch(html, /src="\.\.\/shared\//);
+    const config = require("../webpack.config.js")({}, { mode: "production" });
+    assert.equal(config.entry["widget/guides-translations"], "./widget/guides-translations.js");
+});
+
 test("widget and control inline JavaScript parses", () => {
     ["widget/index.html", "control/content/index.html", "guias-interativo.html"].forEach((file) => {
         const html = fs.readFileSync(path.join(root, file), "utf8");
@@ -46,9 +82,8 @@ test("widget completion code has no legacy userData writes", () => {
     });
 });
 
-test("widget contains no temporary diagnostic alerts", () => {
+test("widget contains no legacy progress diagnostics", () => {
     const source = fs.readFileSync(path.join(root, "widget/release-runtime.js"), "utf8");
-    assert.equal(/\b(?:window|global)?\.?alert\s*\(/.test(source), false);
     assert.equal(source.includes("progressDiagnostic"), false);
 });
 

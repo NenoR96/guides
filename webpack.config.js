@@ -18,6 +18,7 @@ const scripts = [
   "control/content/migrate-existing-content",
   "control/content/release-manager",
   "widget/guides-home-contract",
+  "widget/guides-translations",
   "widget/progress-store",
   "widget/release-runtime",
 ];

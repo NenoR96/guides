@@ -84,6 +84,12 @@ panel validates and extracts the content. In production, canonical datastore
 content is injected by `GuidesAPI`; embedded JSON is only authoring and preview
 context.
 
+Publishing a contract shell removes the embedded content, release manifest,
+standalone preview bootstrap, and AI instructions from the stored HTML. The
+release content snapshot is saved separately. Downloading an AI working file
+recreates these blocks using current canonical content. Legacy shells retain
+their original HTML because they may depend on embedded content.
+
 At publication time, the control panel reloads the latest live datastore
 content. Guides/organization and quizzes are imported only when their respective
 staged-release option is selected. Every unselected content type is copied from

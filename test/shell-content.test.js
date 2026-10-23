@@ -14,6 +14,61 @@ function shellFunction(name) {
     return html.slice(start, end);
 }
 
+test("guide status follows the first unread guide, skipping quizzes and advancing on completion", () => {
+    const readGuides = new Set(['first']);
+    const order = [{ id: 'first', kind: 'guide' }, { id: 'quiz', kind: 'quiz' },
+        { id: 'second', kind: 'guide' }, { id: 'third', kind: 'guide' }];
+    const helpers = new Function('readGuides', 'curriculumOrder', 'guideLabel', '_escapeHtml',
+        shellFunction('nextUnreadGuideId') + '\n' + shellFunction('guideStatusTag') +
+        '\nreturn { nextUnreadGuideId, guideStatusTag };')(readGuides, () => order, (_, fallback) => fallback, value => value);
+    assert.equal(helpers.nextUnreadGuideId(), 'second');
+    assert.match(helpers.guideStatusTag({ id: 'second' }, true, 'badge'), />Start</);
+    assert.equal(helpers.guideStatusTag({ id: 'first' }, true, 'badge'), '');
+    assert.equal(helpers.guideStatusTag({ id: 'third' }, false, 'badge'), '');
+    readGuides.add('second');
+    assert.equal(helpers.nextUnreadGuideId(), 'third');
+    readGuides.add('third');
+    assert.equal(helpers.nextUnreadGuideId(), null);
+    readGuides.delete('first');
+    assert.equal(helpers.nextUnreadGuideId(), 'first');
+});
+
+test("state icons use independent images and exact backgrounds with legacy fallback", () => {
+    const readGuides = new Set();
+    const guide = { id: 'first', icon: 'book', iconUnread: 'https://images.test/unread.png',
+        iconStart: 'https://images.test/start.png', iconRead: 'https://images.test/read.png' };
+    let nextId = 'other';
+    const helpers = new Function('readGuides', 'nextUnreadGuideId', `
+        const GUIDE_ICON_MAP = {}, ICON_COLORS = {};
+        ${['guideVisualState', 'guideIconId', 'guideIconBadgeHTML', 'iconHTML', 'iconColor'].map(name => name === 'iconColor' ? "function iconColor() { return '#575857'; }" : shellFunction(name)).join('\n')}
+        return { icon: guideIconId, badge: guideIconBadgeHTML };
+    `)(readGuides, () => nextId);
+    assert.equal(helpers.icon(guide), guide.iconUnread);
+    assert.match(helpers.badge(guide, 26, 40), /background:#FFFFFF/);
+    nextId = 'first';
+    assert.equal(helpers.icon(guide), guide.iconStart);
+    assert.match(helpers.badge(guide, 26, 40), /background:#F9A247/);
+    readGuides.add('first');
+    assert.equal(helpers.icon(guide), guide.iconRead);
+    assert.match(helpers.badge(guide, 26, 40), /background:#1ABC9B/);
+    guide.iconRead = '';
+    assert.equal(helpers.icon(guide), 'book');
+    guide.iconRead = 'javascript:alert(1)';
+    assert.equal(helpers.icon(guide), 'book');
+    guide.iconRead = 'https://images.test/a" onerror="alert(1)';
+    assert.match(helpers.badge(guide, 26, 40), /a&amp;quot;|a&quot;/);
+    assert.doesNotMatch(helpers.badge(guide, 26, 40), /src="[^"]*" onerror=/);
+});
+
+test("canonical hydration preserves each uploaded state icon", () => {
+    const app = renderer();
+    const data = snapshot();
+    Object.assign(data.lessons[0], { iconUnread: 'https://images.test/u.png', iconStart: 'https://images.test/s.png', iconRead: 'https://images.test/r.png' });
+    app.hydrate(data);
+    const guide = app.guides.find(item => item.id === 'new-guide');
+    for (const key of ['iconUnread', 'iconStart', 'iconRead']) assert.equal(guide[key], data.lessons[0][key]);
+});
+
 function renderer() {
     const headers = { titles: [{ textContent: 'Static title' }, { textContent: 'Static title' }],
         descriptions: [{ textContent: 'Static description' }] };

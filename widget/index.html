@@ -246,13 +246,12 @@
     <main class="app" id="app">
         <section class="state">
             <div class="spinner"></div>
-            <h1>Loading guides…</h1>
-            <p>Retrieving journeys and guides for this plugin.</p>
+            <h1 id="guides-loading-label" aria-live="polite"></h1>
         </section>
     </main>
 
     <script src="progress-store.js"></script>
-    <script src="../shared/guides-translations.js"></script>
+    <script src="guides-translations.js"></script>
     <script src="release-runtime.js"></script>
     <script>
         (function () {
@@ -269,6 +268,7 @@
             const LEGACY_TAG = "interactiveGuideHtml";
             const PAGE_SIZE = 50;
             const app = document.getElementById("app");
+            const label = key => window.GuidesTranslations.get(state.translations, key);
             const state = {
                 lessons: [],
                 lessonById: new Map(),
@@ -412,9 +412,18 @@
                 });
                 const unassigned = state.lessons.filter((lesson) => !seen.has(lesson.slug));
                 if (unassigned.length) {
-                    sections.push({ id: "library", title: configured.length ? "More guides" : "All guides", icon: "book", lessons: unassigned });
+                    sections.push({ id: "library", title: label(configured.length ? 'fallbackMoreGuides' : 'fallbackAllGuides'), icon: "book", lessons: unassigned });
                 }
                 return sections;
+            }
+
+            function lessonImage(lesson, size) {
+                const next = deriveSections().flatMap(section => section.lessons).find(item => !state.completed.has(item.slug));
+                const key = state.completed.has(lesson.slug) ? 'iconRead' : next && next.slug === lesson.slug ? 'iconStart' : 'iconUnread';
+                const background = { iconRead: '#1ABC9B', iconStart: '#F9A247', iconUnread: '#FFFFFF' }[key];
+                const icon = /^https?:\/\//i.test(lesson[key] || '') ? lesson[key] : lesson.icon;
+                if (!/^https?:\/\//i.test(icon || "")) return "";
+                return '<img src="' + escapeHtml(icon) + '" alt="" width="' + size + '" height="' + size + '" style="object-fit:contain;vertical-align:middle;border-radius:50%;background:' + background + '">';
             }
 
             function lessonRow(lesson) {
@@ -422,9 +431,9 @@
                 const icon = done ? "✓" : (lesson.icon ? lesson.icon.slice(0, 2) : "•");
                 return [
                     '<button class="lesson' + (done ? " done" : "") + '" type="button" data-lesson-id="' + escapeHtml(lesson.slug) + '">',
-                    '<span class="lesson-mark">' + escapeHtml(icon) + '</span>',
+                    '<span class="lesson-mark">' + (lessonImage(lesson, 28) || escapeHtml(icon)) + '</span>',
                     '<span class="lesson-copy"><strong>' + escapeHtml(lesson.title),
-                    lesson.premium ? '<span class="badge">Premium</span>' : "",
+                    lesson.premium ? '<span class="badge">' + escapeHtml(label('fallbackPremium')) + '</span>' : "",
                     '</strong><span>' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(" · ")) + '</span></span>',
                     '<span class="lesson-arrow">›</span>',
                     '</button>'
@@ -436,23 +445,23 @@
                 const sections = deriveSections();
                 const completedCount = state.lessons.filter((lesson) => state.completed.has(lesson.slug)).length;
                 const percentage = state.lessons.length ? Math.round(completedCount / state.lessons.length * 100) : 0;
-                const title = state.journey && state.journey.title || "Interactive guides";
-                const description = state.journey && state.journey.description || "Explore all available guides.";
+                const title = state.journey && state.journey.title || label('fallbackTitle');
+                const description = state.journey && state.journey.description || label('fallbackDescription');
                 app.innerHTML = [
                     '<section>',
                     '<header class="home-header"><div class="home-header-inner">',
-                    '<div class="eyebrow">Your journey</div>',
+                    '<div class="eyebrow">' + escapeHtml(label('fallbackYourJourney')) + '</div>',
                     '<h1>' + escapeHtml(title) + '</h1>',
                     '<p>' + escapeHtml(description) + '</p>',
                     '</div></header>',
                     '<div class="content">',
-                    '<div class="progress-card"><div class="progress-row"><span>Journey progress</span><span>' +
-                        completedCount + " of " + state.lessons.length + '</span></div>',
+                    '<div class="progress-card"><div class="progress-row"><span>' + escapeHtml(label('fallbackProgress')) + '</span><span>' +
+                        completedCount + ' ' + escapeHtml(label('fallbackOf')) + ' ' + state.lessons.length + '</span></div>',
                     '<div class="progress-track"><div class="progress-fill" style="width:' + percentage + '%"></div></div></div>',
                     sections.map((section) => [
                         '<section class="journey-section">',
-                        '<div class="section-title"><span class="section-icon">' + escapeHtml((section.icon || "•").slice(0, 2)) + '</span>' +
-                            '<span class="section-heading"><span>' + escapeHtml(section.title || section.id || "Section") + '</span>' +
+                        '<div class="section-title"><span class="section-icon">' + (/^https?:\/\//i.test(section.icon || '') ? '<img src="' + escapeHtml(section.icon) + '" alt="" width="24" height="24" style="object-fit:contain">' : escapeHtml((section.icon || "•").slice(0, 2))) + '</span>' +
+                            '<span class="section-heading"><span>' + escapeHtml(section.title || section.id || label('fallbackAllGuides')) + '</span>' +
                             (section.subtitle ? '<small>' + escapeHtml(section.subtitle) + '</small>' : '') + '</span></div>',
                         '<div class="lesson-list">',
                         section.lessons.length ? section.lessons.map(lessonRow).join("") : '<div class="empty-section">No published guides in this section.</div>',
@@ -472,21 +481,21 @@
                 state.activeScreen = "reader";
                 const done = state.completed.has(slug);
                 const takeaways = Array.isArray(lesson.tldr) && lesson.tldr.length ? [
-                    '<aside class="takeaways"><strong>Key takeaways</strong><ul>',
+                    '<aside class="takeaways"><strong>' + escapeHtml(label('fallbackTakeaways')) + '</strong><ul>',
                     lesson.tldr.map((item) => '<li>' + escapeHtml(item) + '</li>').join(""),
                     '</ul></aside>'
                 ].join("") : "";
                 app.innerHTML = [
                     '<article class="reader">',
-                    '<nav class="reader-nav"><button class="back" id="reader-back" type="button" aria-label="Back">‹</button><strong>' +
+                    '<nav class="reader-nav"><button class="back" id="reader-back" type="button" aria-label="' + escapeHtml(label('fallbackBack')) + '">‹</button><strong>' +
                         escapeHtml(lesson.title) + '</strong></nav>',
                     '<main class="reader-main">',
                     '<div class="reader-meta">' + escapeHtml([lesson.tag, lesson.readTime].filter(Boolean).join(" · ")) + '</div>',
-                    '<h1>' + escapeHtml(lesson.title) + '</h1>',
+                    '<h1>' + lessonImage(lesson, 36) + ' ' + escapeHtml(lesson.title) + '</h1>',
                     takeaways,
                     '<div class="rich-text" id="lesson-content">' + (lesson.bodyHtml || "") + '</div>',
                     '<button class="complete' + (done ? " done" : "") + '" id="toggle-complete" type="button">' +
-                        (done ? "✓ Completed" : "Mark as completed") + '</button>',
+                        escapeHtml(label(done ? 'fallbackCompleted' : 'fallbackComplete')) + '</button>',
                     '</main></article>'
                 ].join("");
                 document.getElementById("reader-back").addEventListener("click", renderHome);
@@ -526,12 +535,14 @@
 
             async function loadCms() {
                 try {
+                    state.translations = await getData(window.GuidesTranslations.tag).catch(() => ({}));
+                    document.getElementById('guides-loading-label').textContent = label('fallbackLoading');
                     // The uploaded interactive HTML is the primary UI shell.
                     // It now hydrates its own guide/journey model from the same
                     // datastore records loaded by the control panel.
                     const legacy = await getData(LEGACY_TAG);
                     if (legacy && typeof legacy.html === "string" && legacy.html.trim()) {
-                        renderLegacy(legacy.html);
+                        renderLegacy(window.GuidesTranslations.apply(legacy.html, state.translations));
                         return;
                     }
 
@@ -553,10 +564,14 @@
                         renderHome();
                         return;
                     }
-                    showState("No guides published", "Add and publish guides from the plugin Content section.");
+                    showState(label('fallbackEmptyTitle'), label('fallbackEmptyMessage'));
                 } catch (error) {
                     console.error("Unable to load guide content", error);
-                    showState("Guides unavailable", "The content could not be loaded. Please try again.");
+                    showState(label('fallbackErrorTitle'), label('fallbackErrorMessage'));
+                    let detail;
+                    try { detail = error && error.message ? error.message : JSON.stringify(error); }
+                    catch (_) { detail = String(error); }
+                    console.error("Guides loading failed (fallback loader)", detail);
                 }
             }
 

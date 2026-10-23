@@ -12,7 +12,7 @@
         contentRevisions: "guideContentRevisions"
     };
     const PAGE_SIZE = 50;
-    const MAX_HTML_BYTES = 4 * 1024 * 1024;
+    const MAX_HTML_BYTES = 6 * 1024 * 1024;
     const state = { draft: null, activeReleaseId: null, releaseState: null, shells: [], initialized: false };
     const $ = (id) => document.getElementById(id);
 
@@ -225,7 +225,7 @@
     }
 
     function validateHtml(html) {
-        if (new Blob([html]).size > MAX_HTML_BYTES) throw new Error("HTML exceeds the 4 MB release limit.");
+        if (new Blob([html]).size > MAX_HTML_BYTES) throw new Error("HTML exceeds the 6 MB release limit.");
         const documentNode = new DOMParser().parseFromString(html, "text/html");
         if (!documentNode.documentElement || !documentNode.body) throw new Error("The file is not a complete HTML document.");
         const contract = contractVersion(documentNode);
@@ -618,7 +618,9 @@
                 description: draft.validation.manifest.description || "",
                 contentUpdate: clone(draft.options),
                 publishedAt: now,
-                html: draft.html
+                // Contract shells receive canonical content through GuidesAPI.
+                // Keep authoring data in the snapshot and AI export, not the runtime shell.
+                html: draft.validation.contract ? removeWorkingBlocks(draft.html) : draft.html
             });
             setPublishStatus("Applying content changes…", "loading");
             await applySnapshot(draft.target, draft.options);

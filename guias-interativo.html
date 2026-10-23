@@ -31,7 +31,7 @@ END GUIDES AI INSTRUCTIONS -->
   "markRead": "✓ Marcar como lido",
   "alreadyCompleted": "✓ Já concluído!",
   "markCompleted": "✓ Marcar como concluído",
-  "start": "Começar",
+  "guideStart": "Start",
   "progressOf": "de",
   "questions": "perguntas",
   "startQuiz": "Bora começar",
@@ -7357,6 +7357,19 @@ END GUIDES AI INSTRUCTIONS -->
       color: #404040;
     }
 
+    .lesson-row:not(.quiz-row) {
+      background: #fff;
+    }
+
+    .lesson-row.completed:not(.quiz-row) {
+      background: #1ABC9B;
+    }
+
+    .lesson-row.is-next:not(.quiz-row) { background: #F9A247; }
+    .lesson-row.completed:not(.quiz-row) .lesson-time,
+    .lesson-row.is-next:not(.quiz-row) .lesson-time { color: #243b36; }
+    .guide-state-icon { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; vertical-align: middle; }
+
     .lesson-time {
       font-size: 11px;
       color: #9ba5ad;
@@ -7701,22 +7714,22 @@ END GUIDES AI INSTRUCTIONS -->
     }
 
     .journey-node.done {
-      background: linear-gradient(135deg, #1ABC9C, #0d9a7e);
+      background: #1ABC9B;
       box-shadow: 0 3px 0 #0b7d63;
       color: #fff;
     }
 
     .journey-node.current {
-      background: linear-gradient(135deg, #f9a247, #e8902a);
+      background: #F9A247;
       box-shadow: 0 3px 0 #c76f16;
       animation: journeyPulse 1.6s infinite;
-      color: #fff;
+      color: #575857;
     }
 
     .journey-node.upcoming {
       background: #fff;
       border-color: #e8e0d8;
-      opacity: 0.85;
+      opacity: 1;
       color: #b9ada0;
     }
 
@@ -10209,6 +10222,10 @@ END GUIDES AI INSTRUCTIONS -->
 
     function iconHTML(id, size, color) {
       size = size || 20;
+      if (/^https?:\/\//i.test(id || '')) {
+        const src = String(id).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<img class="guide-icon-image" src="${src}" alt="" width="${size}" height="${size}" style="object-fit:contain;flex-shrink:0;vertical-align:middle">`;
+      }
       const c = color || iconColor(id);
       return `<svg class="icon-svg" width="${size}" height="${size}" style="color:${c}"><use href="#icon-${id}"></use></svg>`;
     }
@@ -10261,8 +10278,22 @@ END GUIDES AI INSTRUCTIONS -->
       "atemporal-organizar-cozinha": "list",
       "atemporal-industrializado": "label-tag",
     };
+    function guideVisualState(guide) {
+      if (guide && readGuides.has(guide.id)) return 'read';
+      return guide && guide.id === nextUnreadGuideId() ? 'start' : 'unread';
+    }
+
     function guideIconId(guide) {
+      const key = { unread: 'iconUnread', start: 'iconStart', read: 'iconRead' }[guideVisualState(guide)];
+      const image = guide && guide[key];
+      if (/^https?:\/\//i.test(image || '')) return image;
       return (guide && (guide.icon || GUIDE_ICON_MAP[guide.id])) || "leaf";
+    }
+
+    function guideIconBadgeHTML(guide, size, badgeSize) {
+      const state = guideVisualState(guide);
+      const background = { unread: '#FFFFFF', start: '#F9A247', read: '#1ABC9B' }[state];
+      return `<span class="guide-state-icon" style="width:${badgeSize}px;height:${badgeSize}px;background:${background}">${iconHTML(guideIconId(guide), size, state === 'unread' ? undefined : '#fff')}</span>`;
     }
 
     // ─────────────────────────────────────────────
@@ -21009,7 +21040,7 @@ END GUIDES AI INSTRUCTIONS -->
         const snippets = _extractSnippets(entry, words);
         const snippetsHTML = snippets.map(s => `<div class="search-lesson-snippet">${s}</div>`).join('');
         return `<div class="search-lesson${done ? ' completed' : ''}" onclick="openGuide('${g.id}', '${fromTag}')">
-      <div class="lesson-em">${iconBadgeHTML(guideIconId(g), 20, 36, icColor)}</div>
+      <div class="lesson-em">${guideIconBadgeHTML(g, 20, 36)}</div>
       <div class="lesson-body">
         <div class="lesson-title">${g.title}</div>
         <div class="lesson-time">⏱ ${g.readTime}</div>
@@ -21986,6 +22017,7 @@ END GUIDES AI INSTRUCTIONS -->
       if (!data) return;
 
       document.getElementById('milestone-sheet-title').textContent = data.title;
+      document.querySelector('.milestone-sheet-icon').innerHTML = iconHTML(data.icon || 'baby-face', 24);
       document.getElementById('milestone-sheet-esperar').innerHTML =
         data.esperar.map(t => `<li>${t}</li>`).join('');
       document.getElementById('milestone-sheet-lembrese').innerHTML =
@@ -22267,7 +22299,7 @@ END GUIDES AI INSTRUCTIONS -->
       }
       return `
         <div class="related-guide-row" onclick="openGuide('${item.id}', '${lastListScreen}')">
-          <div class="lesson-em">${iconBadgeHTML(guideIconId(item), 20, 36)}</div>
+          <div class="lesson-em">${guideIconBadgeHTML(item, 20, 36)}</div>
           <div class="lesson-body">
             <div class="lesson-title">${item.title}</div>
             <div class="lesson-time">⏱ ${item.readTime}</div>
@@ -22399,13 +22431,25 @@ END GUIDES AI INSTRUCTIONS -->
       renderJourneyHome();
     }
 
+    function nextUnreadGuideId() {
+      const next = curriculumOrder().find(item => item.kind === 'guide' && !readGuides.has(item.id));
+      return next ? next.id : null;
+    }
+
+    function guideStatusTag(guide, isCurrent, className) {
+      const done = readGuides.has(guide.id);
+      if (done || !isCurrent) return '';
+      const label = guideLabel('guideStart', 'Start');
+      return `<span class="${className}">${_escapeHtml(label)}</span>`;
+    }
+
     function buildLessonRow(guide) {
       const done = readGuides.has(guide.id);
       const icColor = done ? '#1ABC9C' : undefined;
-      return `<div class="lesson-row${done ? ' completed' : ''}" onclick="openGuide('${guide.id}')">
-    <div class="lesson-em">${iconBadgeHTML(guideIconId(guide), 20, 36, icColor)}</div>
+      return `<div class="lesson-row${done ? ' completed' : (guide.id === nextUnreadGuideId() ? ' is-next' : '')}" onclick="openGuide('${guide.id}')">
+    <div class="lesson-em">${guideIconBadgeHTML(guide, 20, 36)}</div>
     <div class="lesson-body">
-      <div class="lesson-title">${guide.title}</div>
+      <div class="lesson-title">${guide.title}${guideStatusTag(guide, guide.id === nextUnreadGuideId(), 'lesson-current-badge')}</div>
       <div class="lesson-time">⏱ ${guide.readTime}</div>
     </div>
     <div class="lesson-check">
@@ -22424,10 +22468,10 @@ END GUIDES AI INSTRUCTIONS -->
     function buildJourneyListRow(guide, isCurrent, fromTag) {
       const done = readGuides.has(guide.id);
       const icColor = done ? '#1ABC9C' : undefined;
-      return `<div class="lesson-row${done ? ' completed' : ''}" onclick="openGuide('${guide.id}', '${fromTag}')">
-    <div class="lesson-em">${iconBadgeHTML(guideIconId(guide), 20, 36, icColor)}</div>
+      return `<div class="lesson-row${done ? ' completed' : (isCurrent ? ' is-next' : '')}" onclick="openGuide('${guide.id}', '${fromTag}')">
+    <div class="lesson-em">${guideIconBadgeHTML(guide, 20, 36)}</div>
     <div class="lesson-body">
-      <div class="lesson-title">${guide.title}${isCurrent ? '<span class="lesson-current-badge">Continuar aqui</span>' : ''}</div>
+      <div class="lesson-title">${guide.title}${guideStatusTag(guide, isCurrent, 'lesson-current-badge')}</div>
       <div class="lesson-time">⏱ ${guide.readTime}</div>
     </div>
     <div class="lesson-check">
@@ -22482,7 +22526,7 @@ END GUIDES AI INSTRUCTIONS -->
       const state = done ? 'done' : (isCurrent ? 'current' : 'upcoming');
       return `
         <div class="journey-quiz-node ${state}" onclick="openQuizPlay('${quiz.id}')">
-          ${isCurrent ? '<div class="journey-node-label">Começar</div>' : ''}
+          ${isCurrent ? '<div class="journey-node-label">' + _escapeHtml(guideLabel('guideStart', 'Start')) + '</div>' : ''}
           <span class="journey-quiz-node-text">Quiz</span>
           ${done ? `<div class="journey-node-check">${iconHTML('check-badge', 12)}</div>` : ''}
         </div>
@@ -23139,6 +23183,7 @@ END GUIDES AI INSTRUCTIONS -->
       // por tema, mas quem manda é a ordem da jornada (o currículo de verdade),
       // então o alvo é comparado por id, não pela posição na seção.
       const nextItemId = nextIdx < curriculo.length ? curriculo[nextIdx].id : null;
+      const nextGuideId = nextUnreadGuideId();
 
       const doneCount = ALL_ITEMS_FLAT.filter(isItemDone).length;
       const totalCount = ALL_ITEMS_FLAT.length;
@@ -23183,7 +23228,7 @@ END GUIDES AI INSTRUCTIONS -->
         </div>` : ''}
       ${summary ? `
         <div class="jsb-milestone">
-          <span class="jsb-milestone-icon">${iconHTML('baby-face', 16)}</span>
+          <span class="jsb-milestone-icon">${iconHTML(summary.icon || 'baby-face', 16)}</span>
           <span class="jsb-milestone-text">${summary.title}</span>
           <span class="jsb-milestone-arrow">→</span>
         </div>` : ''}
@@ -23220,7 +23265,7 @@ END GUIDES AI INSTRUCTIONS -->
           const listWrap = document.createElement('div');
           listWrap.className = 'journey-list-items';
           listWrap.innerHTML = section.guides.map(guide => {
-            let html = buildJourneyListRow(guide, guide.id === nextItemId, fromTag);
+            let html = buildJourneyListRow(guide, guide.id === nextGuideId, fromTag);
             const relatedQuizzes = QUIZ_BY_GUIDE_ID[guide.id];
             if (relatedQuizzes) {
               html += relatedQuizzes.map(q => buildJourneyQuizListRow(q, q.id === nextItemId)).join('');
@@ -23235,7 +23280,7 @@ END GUIDES AI INSTRUCTIONS -->
 
             const offset = Math.round(Math.sin(globalIdx * 0.9) * 78);
             const isDone = readGuides.has(guide.id);
-            const isCurrent = guide.id === nextItemId;
+            const isCurrent = !isDone && guide.id === nextGuideId;
             const state = isDone ? 'done' : (isCurrent ? 'current' : 'upcoming');
             // Alvo da âncora de abertura da trilha (scrollPathToCurrent).
             if (isCurrent) row.classList.add('is-current');
@@ -23243,16 +23288,15 @@ END GUIDES AI INSTRUCTIONS -->
             const col = document.createElement('div');
             col.className = 'journey-node-col';
             col.style.transform = `translateX(${offset}px)`;
-            // done/current já têm fundo colorido (teal/laranja) — ícone fica branco.
-            // upcoming é fundo branco, então o ícone mostra a cor própria do tema.
-            const nodeIconColor = state === 'upcoming' ? undefined : '#fff';
+            // Start and Read use coloured backgrounds; Unread stays white.
+            const nodeIconColor = isDone || isCurrent ? '#fff' : undefined;
             // Guia começado e ainda não concluído ganha o anel com a fração
             // lida. Concluído não precisa: a bolinha já fica teal por inteiro.
             const readFraction = isDone ? 1 : guideReadFraction(guide.id);
             const ringHTML = !isDone && readFraction > 0 ? journeyNodeRingHTML(readFraction) : '';
             col.innerHTML = `
           <div class="journey-node ${state}" onclick="openGuide('${guide.id}', '${fromTag}')">
-            ${isCurrent ? `<div class="journey-node-label">${_escapeHtml(guideLabel('start', 'Começar'))}</div>` : ''}
+            ${guideStatusTag(guide, isCurrent, 'journey-node-label')}
             ${ringHTML}
             ${iconHTML(guideIconId(guide), 26, nodeIconColor)}
             ${isDone ? `<div class="journey-node-check">${iconHTML('check-badge', 12)}</div>` : ''}
@@ -23968,7 +24012,7 @@ END GUIDES AI INSTRUCTIONS -->
       readerEndAnchor = null;
 
       document.getElementById('reader-nav-title').textContent = guide.title;
-      document.getElementById('reader-title').innerHTML = iconHTML(guideIconId(guide), 26) + `<span>${guide.title}</span>`;
+      document.getElementById('reader-title').innerHTML = guideIconBadgeHTML(guide, 26, 40) + `<span>${guide.title}</span>`;
       document.getElementById('reader-tag').textContent = guide.tag;
       document.getElementById('reader-time').textContent = guide.readTime;
       document.getElementById('reader-body').innerHTML = processGuideHTML(guide.content);
@@ -24058,7 +24102,10 @@ END GUIDES AI INSTRUCTIONS -->
       }
 
       const currentGuide = ALL_GUIDES_FLAT.find(g => g.id === guideId);
-      if (currentGuide) renderRelatedGuides(currentGuide);
+      if (currentGuide) {
+        renderRelatedGuides(currentGuide);
+        document.getElementById('reader-title').innerHTML = guideIconBadgeHTML(currentGuide, 26, 40) + `<span>${currentGuide.title}</span>`;
+      }
 
       refreshProgressViews();
 
