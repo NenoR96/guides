@@ -14,6 +14,8 @@ const scripts = [
   "shared/guides-home-contract",
   "shared/guides-catalog-sync",
   "shared/guides-translations",
+  "shared/guides-content-import",
+  "control/design/settings",
   "control/content/translations",
   "control/content/migrate-existing-content",
   "control/content/release-manager",

@@ -143,10 +143,22 @@
         }
         fields.disabled = save.disabled = true;
         status.textContent = 'Saving translations...';
-        buildfire.datastore.save(data, api.tag, error => {
-            fields.disabled = save.disabled = false;
-            if (!error) saved = data;
-            status.textContent = error ? 'Unable to save translations. Please try again.' : 'Translations saved.';
+        buildfire.datastore.get(api.tag, (error, result) => {
+            if (error) {
+                fields.disabled = save.disabled = false;
+                status.textContent = 'Unable to load current translations. Nothing was saved.';
+                return;
+            }
+            const merged = { ...(result && result.data || {}) };
+            for (const key of Object.keys(inputs)) {
+                if (Object.hasOwn(data, key)) merged[key] = data[key];
+                else delete merged[key];
+            }
+            buildfire.datastore.save(merged, api.tag, error => {
+                fields.disabled = save.disabled = false;
+                if (!error) saved = merged;
+                status.textContent = error ? 'Unable to save translations. Please try again.' : 'Translations saved.';
+            });
         });
     });
 }());

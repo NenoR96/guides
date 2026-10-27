@@ -214,6 +214,61 @@ const replacements=[
   ]
 ];
 
+const appearanceDefaults = {
+    language: '', pageTitle: '', achievementEnabled: true,
+    background: '#EBEAEA', green: '#1ABC9C', blue: '#207FA7', heading: '#303320',
+    counter: '#F9A247', counterBackground: '#F5F6F3', completedBackground: '#E8F8F5'
+};
+function appearance(value) {
+    const result = { ...appearanceDefaults };
+    if (!value || typeof value !== 'object') return result;
+    for (const key of ['background', 'green', 'blue', 'heading', 'counter', 'counterBackground', 'completedBackground']) {
+        if (/^#[0-9a-f]{6}$/i.test(value[key] || '')) result[key] = value[key];
+    }
+    if (typeof value.language === 'string' && /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(value.language)) result.language = value.language;
+    if (typeof value.pageTitle === 'string') result.pageTitle = value.pageTitle.slice(0, 150);
+    result.achievementEnabled = value.achievementEnabled !== false;
+    return result;
+}
+function applyAppearance(html, value) {
+    if (!value || typeof value !== 'object') return html;
+    // Keep content and manifest JSON byte-for-byte intact, even if an article
+    // contains literal examples of style tags or JavaScript function names.
+    const jsonBlocks = [];
+    html = html.replace(/<script\b(?=[^>]*\btype=["']application\/json["'])[^>]*>[\s\S]*?<\/script>/gi, block => {
+        const index = jsonBlocks.push(block) - 1;
+        return '<!--guides-preserved-json-' + index + '-->';
+    });
+    const config = appearance(value);
+    const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    html = html.replace(/<style id="guides-appearance">[\s\S]*?<\/style>/gi, '')
+        .replace(/<script id="guides-appearance-state">[\s\S]*?<\/script>/gi, '');
+    if (config.language) html = html.replace(/<html\b([^>]*)>/i, (_, attrs) => '<html' + attrs.replace(/\s+lang\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '') + ' lang="' + config.language + '">');
+    if (config.pageTitle) {
+        const title = '<title>' + escape(config.pageTitle) + '</title>';
+        html = /<title\b[^>]*>[\s\S]*?<\/title>/i.test(html) ? html.replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, () => title) : html.replace(/<head\b[^>]*>/i, head => head + title);
+    }
+    const darker = color => '#' + [1, 3, 5].map(offset => Math.round(parseInt(color.slice(offset, offset + 2), 16) * 0.72).toString(16).padStart(2, '0')).join('');
+    const theme = { ...config, greenDark: darker(config.green), blueDark: darker(config.blue), greenSoft: config.green + '22', blueSoft: config.blue + '22' };
+    const palette = { '#faf7f4': 'background', '#ebeaea': 'background', '#2d7d4e': 'green', '#1abc9c': 'green', '#1abc9b': 'green', '#3b82c4': 'blue', '#207fa7': 'blue', '#0d9a7e': 'greenDark', '#14577c': 'blueDark', '#1d7fae': 'blue', '#1abc9c22': 'greenSoft', '#3b82c422': 'blueSoft' };
+    html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, style => style.replace(/var\(--guides-[^)]*\)|#[0-9a-f]{6}(?:[0-9a-f]{2})?\b/gi, color => {
+        const key = palette[color.toLowerCase()];
+        return key ? 'var(--guides-' + key + ', ' + color + ')' : color;
+    }));
+    const guard = 'if (window.__guidesAppearance && window.__guidesAppearance.achievementEnabled === false) return;';
+    if (!html.includes(guard)) html = html.replace(/function showAchievement\(([^)]*)\)\s*\{/, match => match + guard);
+    // These colors are generated as inline styles, outside the stylesheet.
+    html = html.replace("read: '#1ABC9B'", "read: 'var(--guides-green, #1ABC9B)'")
+        .replace("const cores = ['#FFCF4E', '#F9A247', '#1ABC9C', '#3B82C4', '#EB5757'];", "const cores = ['#FFCF4E', '#F9A247', 'var(--guides-green, #1ABC9C)', 'var(--guides-blue, #3B82C4)', '#EB5757'];");
+    const style = '<style id="guides-appearance">:root{' + [...new Set(Object.values(palette))].map(key => '--guides-' + key + ':' + theme[key] + ';').join('') + '}' +
+        'body{background:' + config.background + '!important}.btn-read.done{color:' + config.green + '!important;border-color:' + config.green + '!important;background:' + config.completedBackground + '!important}' +
+        '.jsb-row,.journey-section-title,.module-title{color:' + config.heading + '!important}.jsb-count,.journey-section-count,.module-count{color:' + config.counter + '!important;background:' + config.counterBackground + '!important}' +
+        '#progress-ring-circle{stroke:var(--guides-green)!important}' +
+        '</style>';
+    const script = '<script id="guides-appearance-state">window.__guidesAppearance=' + JSON.stringify(config).replace(/</g, '\\u003c') + ';<\/script>';
+    return html.replace(/<\/head>/i, () => style + script + '</head>')
+        .replace(/<!--guides-preserved-json-(\d+)-->/g, (_, index) => jsonBlocks[Number(index)]);
+}
 function apply(html, overrides) {
     // Update already-uploaded shells as well as newly uploaded guide HTML.
     html = html.replace("iconHTML('baby-face', 16)", "iconHTML(summary.icon || 'baby-face', 16)");
@@ -255,10 +310,10 @@ function apply(html, overrides) {
         });
     }).join('');
     const json = JSON.stringify(labels).replace(/</g, '\\u003c');
-    if (match) return html.replace(pattern, (_, start, body, end) => start + json + end);
-    return html.replace(/<head\b[^>]*>/i, head => head + '<script id="guides-ui-labels" type="application/json">' + json + '</script>');
+    const translated = match ? html.replace(pattern, (_, start, body, end) => start + json + end) : html.replace(/<head\b[^>]*>/i, head => head + '<script id="guides-ui-labels" type="application/json">' + json + '</script>');
+    return applyAppearance(translated, overrides && overrides.appearance);
 }
-const api = { defaults, staticLabels, fallbackDefaults, get, apply, tag: 'guideTranslations' };
+const api = { defaults, staticLabels, fallbackDefaults, get, apply, appearance, appearanceDefaults, applyAppearance, tag: 'guideTranslations' };
 if (typeof module === 'object' && module.exports) module.exports = api;
 global.GuidesTranslations = api;
 }(typeof window === 'undefined' ? globalThis : window));

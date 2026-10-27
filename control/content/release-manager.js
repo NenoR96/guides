@@ -127,21 +127,43 @@
         }
     }
 
-    function safeBodyHtml(html, label) {
+    function safeBodyHtml(html, label, contentOnly) {
         const template = document.createElement("template");
         template.innerHTML = String(html || "");
         if (template.content.querySelector("script")) throw new Error(label + " bodyHtml cannot contain scripts.");
+        if (contentOnly && template.content.querySelector('style,link,meta,base,object,embed,form')) throw new Error(label + ' contains page-level markup. Content imports accept article markup and HTTPS media iframes, not page styles or scripts.');
+        if (contentOnly) {
+            for (const frame of template.content.querySelectorAll('iframe')) {
+                let url;
+                try { url = new URL(frame.getAttribute('src') || ''); } catch (_) {}
+                if (!url || url.protocol !== 'https:') throw new Error(label + ' contains an iframe without an absolute HTTPS source. Use the media provider’s HTTPS embed URL.');
+            }
+        }
         for (const element of template.content.querySelectorAll("*")) {
             for (const attribute of Array.from(element.attributes)) {
                 const name = attribute.name.toLowerCase();
-                const value = attribute.value.trim().toLowerCase();
+                const value = attribute.value.trim().toLowerCase().replace(/[\u0000-\u0020]/g, '');
                 if (name.startsWith("on") || name === "srcdoc") element.removeAttribute(attribute.name);
-                else if (["href", "src", "xlink:href"].includes(name) && value.startsWith("javascript:")) {
+                else if (["href", "src", "xlink:href"].includes(name) && /^(?:javascript|vbscript|data):/.test(value) && !/^data:image\/(?:png|jpeg|gif|webp);base64,/.test(value)) {
                     element.removeAttribute(attribute.name);
                 }
             }
         }
         return template.innerHTML.trim();
+    }
+
+    function validateAuthoringContent(raw) {
+        const content = validateContentPayload({ ...clone(raw), journeyData: null, journeys: null, archivedLessonIds: [], archivedQuizIds: [] });
+        const clean = (value, label) => {
+            if (typeof value === 'string') return /<[a-z!/]/i.test(value) ? safeBodyHtml(value, label, true) : value;
+            if (Array.isArray(value)) return value.map(item => clean(item, label));
+            if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clean(item, label)]));
+            return value;
+        };
+        for (const type of ['lessons', 'quizzes']) {
+            content[type] = content[type].map(record => ({ ...record, ...clean(global.GuidesContentImport.editable(record, type), record.slug || record.id) }));
+        }
+        return content;
     }
 
     function validateContentPayload(raw) {
@@ -323,10 +345,11 @@
         };
     }
 
-    function selectedContentPayload(draft) {
+    async function selectedContentPayload(draft) {
         const content = draft && draft.validation && draft.validation.content;
         if (!content) return null;
         const options = draft.options || {};
+        if (draft.contentOnly) return global.GuidesContentImport.plan(content, draft.before, draft.baseline, options);
         return {
             schemaVersion: content.schemaVersion,
             lessons: options.updateGuides ? content.lessons : [],
@@ -337,16 +360,19 @@
         };
     }
 
-    function refreshDraftSelection(draft, before) {
+    async function refreshDraftSelection(draft, before) {
         const snapshot = before || draft.before;
-        const payload = selectedContentPayload(draft);
         draft.before = snapshot;
-        draft.target = targetSnapshot(payload, snapshot);
-        draft.diff = contentDiff(payload, snapshot);
         draft.selectionError = null;
         try {
-            validateTargetSnapshot(draft.target);
+            const payload = await selectedContentPayload(draft);
+            draft.payload = payload;
+            draft.target = targetSnapshot(payload, snapshot);
+            draft.diff = contentDiff(payload, snapshot);
+            if (!draft.contentOnly) validateTargetSnapshot(draft.target);
         } catch (error) {
+            draft.target = targetSnapshot(null, snapshot);
+            draft.diff = contentDiff(null, snapshot);
             // Keep the user's checkbox choice visible. Some releases require
             // guides and quizzes together, so the first click can be an invalid
             // intermediate state until the second option is selected.
@@ -407,16 +433,19 @@
         const hasContent = !!state.draft.validation.content;
         const updateGuides = hasContent && state.draft.options.updateGuides;
         const updateQuizzes = hasContent && state.draft.options.updateQuizzes;
+        $("release-guides-label").textContent = state.draft.contentOnly ? 'Update guide article content' : 'Update guides and organization';
+        resetPublishConfirmation();
         $("release-update-guides").disabled = !hasContent;
         $("release-update-quizzes").disabled = !hasContent;
         $("release-update-guides").checked = !!updateGuides;
         $("release-update-quizzes").checked = !!updateQuizzes;
-        $("release-diff").innerHTML = '<strong>' + state.draft.fileName + '</strong><br>' +
+        const safeFileName = state.draft.fileName.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+        $("release-diff").innerHTML = '<strong>' + safeFileName + '</strong><br>' +
             'Contract v' + state.draft.validation.contract + ' · ' +
             (updateGuides
                 ? diff.creates.length + ' new guides · ' + diff.updates.length + ' updated · ' +
                     diff.archives.length + ' archived · ' + diff.unchanged.length + ' unchanged' +
-                    (state.draft.validation.content.journeyData ? ' · organization included' : ' · organization unchanged')
+                    (!state.draft.contentOnly && state.draft.validation.content.journeyData ? ' · organization included' : ' · organization unchanged')
                 : 'guides and organization preserved from live datastore');
         $("release-diff").innerHTML += '<br>' + (updateQuizzes
             ? diff.quizCreates.length + ' new quiz(zes) / ' + diff.quizUpdates.length + ' updated / ' +
@@ -425,6 +454,7 @@
         const warnings = $("release-warnings");
         warnings.innerHTML = "";
         const draftWarnings = state.draft.validation.warnings.slice();
+        if (state.draft.contentOnly) draftWarnings.push('Content only: uploaded HTML, code, icons, translations, organization, visibility and archive changes are not imported. New guides and quizzes publish immediately. Archive or publish records in their control-panel editors.');
         if (state.draft.selectionError) draftWarnings.push("Content selection: " + state.draft.selectionError);
         draftWarnings.forEach((warning) => {
             const item = document.createElement("li");
@@ -432,6 +462,25 @@
             warnings.appendChild(item);
         });
         warnings.hidden = !draftWarnings.length;
+        const changes = $("release-content-diff");
+        changes.replaceChildren();
+        if (state.draft.contentOnly && state.draft.payload && !state.draft.selectionError) {
+            for (const type of ['lessons', 'quizzes']) {
+                const key = type === 'lessons' ? 'slug' : 'id';
+                for (const record of state.draft.payload[type]) {
+                    const previous = state.draft.before[type].find(item => item[key] === record[key]);
+                    const detail = document.createElement('details');
+                    const heading = document.createElement('summary');
+                    heading.textContent = (previous ? 'Update: ' : 'New published item: ') + record.title + ' (' + record[key] + ')';
+                    const before = document.createElement('pre'), after = document.createElement('pre');
+                    before.style.whiteSpace = after.style.whiteSpace = 'pre-wrap';
+                    before.textContent = 'Before\n' + JSON.stringify(previous ? global.GuidesContentImport.editable(previous, type) : null, null, 2);
+                    after.textContent = 'After\n' + JSON.stringify(global.GuidesContentImport.editable(record, type), null, 2);
+                    detail.append(heading, before, after);
+                    changes.append(detail);
+                }
+            }
+        }
         $("publish-release").disabled = !!state.draft.selectionError;
         const target = state.draft.target;
         const journeys = target.journeyData && target.journeyData.journeys || [];
@@ -450,40 +499,63 @@
             currentUser: { id: "preview-user", displayName: "Preview User", firstName: "Preview" },
             entitlements: { hasSubscriptions: true, subscriptions: [] }
         };
-        $("release-preview").srcdoc = injectAfterHead(state.draft.html, previewBootstrap(previewData));
+        $("release-preview").srcdoc = injectAfterHead(removeWorkingBlocks(state.draft.html), previewBootstrap(previewData));
         panel.classList.add("visible");
     }
 
     async function stageFile(file) {
+        if (state.busy) return;
         if (!/\.html?$/i.test(file.name) && file.type !== "text/html" && file.type !== "") {
             setStatus("Please choose an .html or .htm file.", "error");
             return;
         }
         try {
+            state.busy = true;
+            $("release-mode").disabled = true;
+            const contentOnly = $("release-mode").value !== 'developer';
             setStatus("Reading and validating " + file.name + "…", "loading");
             const html = await file.text();
             if (!html.trim()) throw new Error("The selected HTML file is empty.");
-            const validation = validateHtml(html);
+            let validation;
+            if (contentOnly) {
+                if (new Blob([html]).size > MAX_HTML_BYTES) throw new Error('HTML exceeds the 6 MB limit.');
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const raw = parseJsonScript(doc, 'guides-content', true);
+                // Archive and organization fields are control-panel owned, including
+                // either archive-list or published:false exports from older tools.
+                const content = validateAuthoringContent(raw);
+                validation = { contract: 1, content, manifest: parseJsonScript(doc, 'guides-release-manifest', true), warnings: [] };
+            } else validation = validateHtml(html);
             const before = await currentSnapshot();
+            const baselineId = validation.manifest && validation.manifest.contentExportId;
+            const baseline = contentOnly && /^export-[a-zA-Z0-9-]+$/.test(baselineId || '') ? await getData('guideAuthoring-' + baselineId) : null;
+            const previewHtml = contentOnly ? await currentShellHtml() : html;
+            if (contentOnly && contractVersion(new DOMParser().parseFromString(previewHtml, 'text/html')) !== 1) throw new Error('Publish a protected shared template through Developer template release before importing content.');
+            const translations = await getData(global.GuidesTranslations.tag);
             state.draft = {
-                html,
+                html: global.GuidesTranslations.apply(previewHtml, translations),
+                sourceHtml: previewHtml,
+                contentOnly,
+                baseline,
                 fileName: file.name,
                 fileSize: file.size,
                 validation,
                 before,
-                options: { updateGuides: false, updateQuizzes: false },
+                options: { updateGuides: contentOnly, updateQuizzes: contentOnly },
                 diff: null,
                 target: null
             };
-            refreshDraftSelection(state.draft);
+            await refreshDraftSelection(state.draft);
             setPublishStatus("", "");
             renderDraft();
-            setStatus("Release staged as design-only. Choose explicitly if this upload should update guides or quizzes.", "success");
+            setStatus(contentOnly ? 'Content import staged. Preview uses the current template and control-panel settings. Review changes before applying.' : 'Developer template release staged. Content updates are off by default.', 'success');
         } catch (error) {
             state.draft = null;
             renderDraft();
             setStatus("Unable to stage release: " + errorMessage(error), "error");
         } finally {
+            state.busy = false;
+            $("release-mode").disabled = false;
             const input = $("html-file");
             if (input) input.value = "";
         }
@@ -555,7 +627,7 @@
         const button = $("publish-release");
         if (!button) return;
         delete button.dataset.confirmPublish;
-        button.textContent = "Publish release";
+        button.textContent = state.draft && state.draft.contentOnly ? "Apply content changes" : "Publish release";
         if (publishConfirmationTimer) clearTimeout(publishConfirmationTimer);
         publishConfirmationTimer = null;
     }
@@ -571,7 +643,7 @@
         const choices = [];
         if (state.draft && state.draft.options.updateGuides) choices.push("guides and organization");
         if (state.draft && state.draft.options.updateQuizzes) choices.push("quizzes");
-        setPublishStatus("Publishing " + (choices.length ? "the shell plus " + choices.join(" and ") : "the shell only") + ". Click Publish again within 8 seconds to confirm.", "warning");
+        setPublishStatus(state.draft.contentOnly ? 'Apply the reviewed article and quiz changes? Click again within 8 seconds. Template and control-panel settings are preserved.' : "Publishing " + (choices.length ? "the shell plus " + choices.join(" and ") : "the shell only") + ". Click Publish again within 8 seconds to confirm.", "warning");
         publishConfirmationTimer = setTimeout(() => {
             resetPublishConfirmation();
             setPublishStatus("", "");
@@ -580,22 +652,26 @@
     }
 
     async function publishDraft() {
+        if (state.busy) return;
         if (!state.draft) return;
         if (state.draft.selectionError) {
             setPublishStatus("Resolve the content selection warning before publishing: " + state.draft.selectionError, "error");
             return;
         }
         if (!confirmPublishInPage()) return;
+        if (state.draft.contentOnly) return publishContentDraft();
         const draft = state.draft;
         const id = releaseId();
         const now = new Date().toISOString();
+        let contentWritten = false;
         try {
+            state.busy = true;
             $("publish-release").disabled = true;
             // Re-read live content at the last possible moment. Any content type
             // not explicitly selected remains exactly as the team most recently
             // saved it, even if it changed after this HTML was staged.
             const liveBeforePublish = await currentSnapshot();
-            refreshDraftSelection(draft, liveBeforePublish);
+            await refreshDraftSelection(draft, liveBeforePublish);
             if (draft.selectionError) throw new Error(draft.selectionError);
             if (!global.GuidesDeepLinks || typeof global.GuidesDeepLinks.syncAll !== "function") {
                 throw new Error("Guide and quiz deep-link registration is unavailable.");
@@ -620,9 +696,10 @@
                 publishedAt: now,
                 // Contract shells receive canonical content through GuidesAPI.
                 // Keep authoring data in the snapshot and AI export, not the runtime shell.
-                html: draft.validation.contract ? removeWorkingBlocks(draft.html) : draft.html
+                html: draft.validation.contract ? removeWorkingBlocks(draft.sourceHtml || draft.html) : (draft.sourceHtml || draft.html)
             });
             setPublishStatus("Applying content changes…", "loading");
+            contentWritten = true;
             await applySnapshot(draft.target, draft.options);
             setPublishStatus("Registering guide and quiz deep links…", "loading");
             await global.GuidesDeepLinks.syncAll(draft.target.lessons, draft.target.quizzes);
@@ -642,6 +719,10 @@
             }
         } catch (error) {
             console.error("Unable to publish guide release", error);
+            if (!contentWritten) {
+                setPublishStatus('Publish stopped before content changes: ' + errorMessage(error), 'error');
+                return;
+            }
             try {
                 await applySnapshot({ lessons: draft.before.lessons, quizzes: draft.before.quizzes, journeyData: draft.before.journeyData }, draft.options);
                 setPublishStatus("Publish failed and content was restored: " + errorMessage(error), "error");
@@ -650,6 +731,77 @@
                 setPublishStatus("Publish failed and automatic restoration also failed. Export content before retrying. " + errorMessage(error), "error");
             }
         } finally {
+            state.busy = false;
+            $("publish-release").disabled = !!(state.draft && state.draft.selectionError);
+            resetPublishConfirmation();
+        }
+    }
+
+    async function publishContentDraft() {
+        const draft = state.draft;
+        state.busy = true;
+        const written = [];
+        try {
+            $("publish-release").disabled = true;
+            await refreshDraftSelection(draft, await currentSnapshot());
+            if (draft.selectionError) throw new Error(draft.selectionError);
+            if (!global.GuidesCatalogSync || !global.GuidesDeepLinks) throw new Error('Content synchronization is unavailable. Reload the control panel.');
+            for (const type of ['lessons', 'quizzes']) {
+                for (const item of draft.payload[type]) {
+                    // Recheck immediately before each write; never rewrite untouched records.
+                    const fresh = await currentSnapshot();
+                    const key = type === 'lessons' ? 'slug' : 'id';
+                    const remaining = { ...draft.validation.content };
+                    for (const recordType of ['lessons', 'quizzes']) {
+                        const idKey = recordType === 'lessons' ? 'slug' : 'id';
+                        const completed = new Set(written.filter(change => change.type === recordType).map(change => change.after[idKey]));
+                        remaining[recordType] = remaining[recordType].filter(record => !completed.has(record[idKey]));
+                    }
+                    const pending = await global.GuidesContentImport.plan(remaining, fresh, draft.baseline, draft.options);
+                    const next = pending[type].find(record => record[key] === item[key]);
+                    if (!next) continue;
+                    const records = type === 'lessons' ? fresh.lessonRecords : fresh.quizRecords;
+                    const existing = records.find(record => recordData(record)[key] === item[key]);
+                    if (existing) {
+                        await update(TAGS[type], recordId(existing), next);
+                        written.push({ type, id: recordId(existing), before: clone(recordData(existing)), after: next });
+                    } else {
+                        const inserted = await insert(TAGS[type], next);
+                        written.push({ type, id: recordId(inserted), before: null, after: next });
+                    }
+                }
+            }
+            await global.GuidesCatalogSync.syncFromDatastore();
+            const latest = await currentSnapshot();
+            await global.GuidesDeepLinks.syncAll(latest.lessons, latest.quizzes);
+            state.draft = null;
+            renderDraft();
+            global.dispatchEvent(new CustomEvent('guides-content-imported'));
+            setStatus('Content changes applied. New guides and quizzes are published. Existing publication status is preserved. Design and settings were preserved.', 'success');
+            if (buildfire.messaging) buildfire.messaging.sendMessageToWidget({ type: 'guides-release-published', releaseId: state.activeReleaseId });
+        } catch (error) {
+            // Only undo our own writes if nobody has edited the same record since.
+            let restored = true;
+            for (const change of written.reverse()) {
+                try {
+                    const records = await searchRecords(TAGS[change.type]);
+                    const current = records.find(record => recordId(record) === change.id);
+                    if (!change.id || !current || global.GuidesContentImport.canonical(recordData(current)) !== global.GuidesContentImport.canonical(change.after)) { restored = false; continue; }
+                    if (change.before) await update(TAGS[change.type], change.id, change.before);
+                    else await deleteRecord(TAGS[change.type], change.id);
+                } catch (_) { restored = false; }
+            }
+            if (written.length) {
+                try {
+                    await global.GuidesCatalogSync.syncFromDatastore();
+                    const latest = await currentSnapshot();
+                    await global.GuidesDeepLinks.syncAll(latest.lessons, latest.quizzes);
+                } catch (_) { restored = false; }
+            }
+            renderDraft();
+            setPublishStatus((!written.length ? 'No content was changed. ' : restored ? 'Import failed; its changes were restored. ' : 'Import stopped; some changes could not be restored. Review content before retrying. ') + errorMessage(error), 'error');
+        } finally {
+            state.busy = false;
             $("publish-release").disabled = !!(state.draft && state.draft.selectionError);
             resetPublishConfirmation();
         }
@@ -662,6 +814,7 @@
     }
 
     async function restoreRelease(id, button) {
+        if (state.busy) return;
         const shell = state.shells.find((item) => item.releaseId === id);
         if (!shell || id === state.activeReleaseId) return;
         if (!button || button.dataset.confirmRestore !== "true") {
@@ -916,7 +1069,7 @@
             .replace(/<!--\s*GUIDES AI WORKING FILE[\s\S]*?END GUIDES AI INSTRUCTIONS\s*-->/gi, "");
     }
 
-    function addWorkingBlocks(html, content) {
+    function addWorkingBlocks(html, content, contentExportId) {
         const instructions = `<!-- GUIDES AI WORKING FILE
 This file contains real design and content context. You may edit both.
 Rules:
@@ -936,6 +1089,7 @@ Rules:
 14. An archived ID must not also appear in lessons[] or quizzes[] in the same upload. Remove the archived record from the upload array and keep its ID in the corresponding archive list.
 END GUIDES AI INSTRUCTIONS -->`;
         const manifest = {
+            contentExportId,
             schemaVersion: 1,
             shellContractVersion: 1,
             contentSchemaVersion: 1,
@@ -956,12 +1110,20 @@ END GUIDES AI INSTRUCTIONS -->`;
             : charset + "\n" + blocks + "\n" + clean;
     }
 
+    async function currentShellHtml() {
+        const releaseState = await getData(TAGS.releaseState);
+        const shells = await searchRecords(TAGS.shells);
+        const active = shells.map(recordData).find(shell => shell.releaseId === (releaseState && releaseState.activeReleaseId));
+        const legacy = active ? null : await getData(TAGS.legacyHtml);
+        return active && active.html || legacy && legacy.html || starterShell();
+    }
+
     async function downloadWorkingFile() {
+        if (state.busy) return;
         try {
             setStatus("Preparing the AI working file…", "loading");
-            const [snapshot, legacy] = await Promise.all([currentSnapshot(), getData(TAGS.legacyHtml)]);
-            const active = state.shells.find((item) => item.releaseId === state.activeReleaseId);
-            const html = active && active.html || legacy && legacy.html || starterShell();
+            const [snapshot, currentHtml, translations] = await Promise.all([currentSnapshot(), currentShellHtml(), getData(global.GuidesTranslations.tag)]);
+            const html = global.GuidesTranslations.apply(currentHtml, translations);
             const content = {
                 schemaVersion: 1,
                 exportType: "buildfire-guides-ai-release",
@@ -980,7 +1142,10 @@ END GUIDES AI INSTRUCTIONS -->`;
                 archivedLessonIds: [],
                 archivedQuizIds: []
             };
-            downloadText(addWorkingBlocks(html, content), "text/html;charset=utf-8", "guides-ai-working-file.html");
+            const contentExportId = 'export-' + crypto.randomUUID();
+            const baseline = await global.GuidesContentImport.baseline(content, validateAuthoringContent(content));
+            await saveData({ ...baseline, exportedAt: new Date().toISOString() }, 'guideAuthoring-' + contentExportId);
+            downloadText(addWorkingBlocks(html, content, contentExportId), "text/html;charset=utf-8", "guides-ai-working-file.html");
             setStatus("AI working file downloaded with current design, content, contract instructions, and stable IDs.", "success");
         } catch (error) {
             setStatus("Unable to prepare AI working file: " + errorMessage(error), "error");
@@ -996,7 +1161,14 @@ END GUIDES AI INSTRUCTIONS -->`;
             setStatus("Unable to load release history: " + errorMessage(error), "error");
         }
         $("download-ai-working-file").addEventListener("click", downloadWorkingFile);
+        $("release-mode").addEventListener('change', () => {
+            if (state.busy) return;
+            state.draft = null;
+            renderDraft();
+            setStatus('Upload an HTML file for the selected mode.', '');
+        });
         $("discard-release").addEventListener("click", () => {
+            if (state.busy) return;
             resetPublishConfirmation();
             state.draft = null;
             renderDraft();
@@ -1004,11 +1176,14 @@ END GUIDES AI INSTRUCTIONS -->`;
         });
         $("publish-release").addEventListener("click", publishDraft);
         ["release-update-guides", "release-update-quizzes"].forEach((id) => {
-            $(id).addEventListener("change", () => {
+            $(id).addEventListener("change", async () => {
+                if (state.busy) { renderDraft(); return; }
                 if (!state.draft) return;
+                state.busy = true;
                 state.draft.options.updateGuides = $("release-update-guides").checked;
                 state.draft.options.updateQuizzes = $("release-update-quizzes").checked;
-                refreshDraftSelection(state.draft);
+                await refreshDraftSelection(state.draft);
+                state.busy = false;
                 resetPublishConfirmation();
                 renderDraft();
                 if (state.draft.selectionError) {

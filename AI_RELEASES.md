@@ -5,16 +5,48 @@ letting an AI work with all of them in one HTML file.
 
 ## Team workflow
 
-1. Open **Content → HTML → AI release**.
+1. Open **Content → HTML → HTML content import**.
 2. Select **Download AI working file**.
 3. Give the downloaded HTML to the AI together with the requested changes.
-4. Upload the returned HTML. Uploading only stages it.
-5. Choose whether the upload may update guides/organization, quizzes, both, or neither.
-   Both content options are off by default so a design release cannot overwrite
-   content maintained manually in the CMS.
-6. Review the content diff, warnings, and interactive preview.
-7. Publish the release or discard it.
-8. Use **Release history** to restore or delete inactive releases.
+4. Keep **Content only (articles and quizzes)** selected and upload the returned HTML.
+   Uploading only stages it. Guide and quiz content are selected by default.
+5. Review the before/after content details and interactive preview. The preview uses
+   the current template and saved control-panel settings, not the uploaded executable HTML.
+6. Apply the changes or discard them. Existing publication, premium, icons,
+   organization, quiz relationships, translations, and appearance settings are preserved.
+   New guides and quizzes publish immediately. New quizzes keep their supplied guide links, which must point to published guides (including guides selected in the same import). New guides without organization placement appear under Other guides; arrange them in the control panel.
+7. Use **Developer template release** only for shared HTML/CSS/JavaScript maintenance.
+   In that mode content updates are off by default. The existing matched release history
+   and restore operations apply to developer releases.
+
+Content-only imports accept guide titles, article HTML, takeaways, reading time and
+callouts; quizzes accept titles, introductions, questions, bonus questions and results.
+Omitted records are preserved. Neither archive lists nor `published: false` in an
+uploaded file change visibility in content mode: publish/unpublish in the control panel.
+For developer releases, archive lists must not overlap uploaded record arrays;
+unpublished records can also be retained in those arrays.
+
+Each fresh HTML download includes an export ID in its manifest. The control panel
+stores SHA-256 fingerprints of that export separately in `guideAuthoring-export-*`
+datastore records. Unchanged records in an older export are skipped. Edited records
+that conflict with newer content or changed visibility are blocked, both at staging
+and immediately before writing. Files without a matching baseline must be downloaded
+again and edits reapplied. This is optimistic checking, not a datastore transaction;
+avoid simultaneous publishing from multiple editors. Failed imports attempt to undo
+only their own writes and preserve subsequent edits from another editor.
+
+The embedded Claude instructions have deliberately not been changed. The content-only
+importer enforces the field boundary independently of those instructions.
+
+## Appearance and behavior
+
+The **Design** panel controls background, green/blue
+accents, section-title and counter colors, completed-button background, and the
+topic-completion achievement popup. Ending-card visibility/text/actions remain under
+Content → Organization. Settings are stored alongside translations under
+`guideTranslations.appearance` and are applied to the widget, staged preview and
+downloaded working HTML. Reopen the widget after saving. Template-specific styling
+hooks target the shared guides template; arbitrary third-party shells may need adaptation.
 
 Restoring a release changes the design and canonical content snapshot. It never
 changes authenticated appData progress or anonymous device-local progress.
@@ -79,8 +111,9 @@ The downloaded HTML contains two JSON scripts:
 <script id="guides-content" type="application/json">...</script>
 ```
 
-The AI may update design and content in the same file. On upload, the control
-panel validates and extracts the content. In production, canonical datastore
+The working HTML still contains design and content for offline preview. The normal
+upload extracts only allowed content fields; developer mode can replace the template.
+In production, canonical datastore
 content is injected by `GuidesAPI`; embedded JSON is only authoring and preview
 context.
 
@@ -90,15 +123,16 @@ release content snapshot is saved separately. Downloading an AI working file
 recreates these blocks using current canonical content. Legacy shells retain
 their original HTML because they may depend on embedded content.
 
-At publication time, the control panel reloads the latest live datastore
+At developer-release publication time, the control panel reloads the latest live datastore
 content. Guides/organization and quizzes are imported only when their respective
 staged-release option is selected. Every unselected content type is copied from
 that latest live state into the release snapshot, preventing changes made by the
 CMS team after staging from being overwritten.
 
 Existing guide IDs (`lesson.slug` in the compatibility schema) and journey IDs are permanent. A title change must not
-change its stable ID. Guides omitted from `lessons` are preserved. Intentional
-archival uses `archivedLessonIds`.
+change its stable ID. Guides omitted from `lessons` are preserved. In developer
+releases, intentional archival uses `archivedLessonIds`. Normal content imports
+leave archive status to the control panel.
 
 ## Shared HTML renderer and country versions
 

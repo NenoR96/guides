@@ -1429,11 +1429,11 @@
             <section class="card">
                 <div class="card-header">
                     <div>
-                        <h2>AI release</h2>
-                        <p class="description">Stage an AI working HTML file, review its design and content changes,
-                            then publish them as one rollback-safe release.</p>
+                        <h2>HTML content import</h2>
+                        <p class="description">Download HTML to edit and preview content with Claude. Import article and quiz changes while preserving the current template and control-panel settings.</p>
                     </div>
                 </div>
+                <div class="field"><label for="release-mode">Upload mode</label><select id="release-mode"><option value="content">Content only (articles and quizzes)</option><option value="developer">Developer template release (HTML, CSS and JavaScript)</option></select><small>Choose the mode before uploading. Developer mode replaces the template and is intended for shared template maintenance.</small></div>
                 <label class="html-upload-drop" for="html-file">
                     <span id="html-file-prompt">Choose an AI working .html file to stage</span>
                     <input id="html-file" type="file" accept=".html,.htm,text/html">
@@ -1458,12 +1458,13 @@
                         </div>
                     </div>
                     <p class="release-summary" id="release-diff"></p>
+                    <div id="release-content-diff"></div>
                     <ul class="release-warnings" id="release-warnings"></ul>
                     <div class="release-content-options" id="release-content-options">
                         <strong>Choose what this upload may update</strong>
-                        <label><input id="release-update-guides" type="checkbox"> Update guides and their organization from the uploaded HTML</label>
+                        <label><input id="release-update-guides" type="checkbox"> <span id="release-guides-label">Update guide article content</span></label>
                         <label><input id="release-update-quizzes" type="checkbox"> Update quizzes from the uploaded HTML</label>
-                        <small>Both are off by default. Unchecked datastore content is preserved from the latest live version when Publish is clicked. Selected types may replace matching records, so review the refreshed diff.</small>
+                        <small>Content mode preserves icons, organization, visibility, premium settings and archive status. New items publish immediately; existing items keep their publication status. Use the guide and quiz editors to publish or archive. Omitted items are preserved. Older HTML without an export baseline must be refreshed before content import.</small>
                     </div>
                     <div class="inline-actions html-export-actions publish-actions">
                         <button class="btn small" id="discard-release" type="button">Discard</button>
@@ -4400,6 +4401,16 @@
                 renderLessonList();
             }
 
+            window.addEventListener('guides-content-imported', async () => {
+                try {
+                    await Promise.all([loadLessons(), loadQuizzes()]);
+                    clearLessonForm(false);
+                    clearQuizForm(false);
+                } catch (error) {
+                    setStatus($("html-status"), "Content was imported, but the editor list could not refresh. Reload the control panel.", "error");
+                }
+            });
+
             async function initialize() {
                 if (state.initialized) return;
                 state.initialized = true;
@@ -4581,7 +4592,10 @@
             htmlFileInput.addEventListener("change", (event) => {
                 const file = event.target.files && event.target.files[0];
                 if (file && window.GuidesReleaseManager) window.GuidesReleaseManager.stageFile(file);
-                else if (file) readHtmlFile(file);
+                else if (file) {
+                    htmlFileInput.value = "";
+                    setStatus($("html-status"), "The HTML importer did not load. Reload the control panel before uploading.", "error");
+                }
             });
             $("download-html").addEventListener("click", () => {
                 if (window.GuidesReleaseManager) window.GuidesReleaseManager.downloadActiveShell();
@@ -4630,8 +4644,9 @@
             }
         }());
     </script>
-    <script src="release-manager.js"></script>
     <script src="../../shared/guides-translations.js"></script>
+    <script src="../../shared/guides-content-import.js"></script>
+    <script src="release-manager.js"></script>
     <script src="translations.js"></script>
 </body>
 
